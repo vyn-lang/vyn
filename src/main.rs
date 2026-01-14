@@ -1,3 +1,6 @@
+use hydor::lexer::Lexer;
+
 fn main() {
-    println!("Hello, world");
+    let mut lexer = Lexer::new("let x = \"Hello world\"");
+    println!("{:#?}", lexer.tokenize())
 }
