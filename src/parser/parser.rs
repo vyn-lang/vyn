@@ -1,10 +1,11 @@
+use std::collections::HashMap;
+
 use crate::{
     ast::{Expr, Expression, Program, Statement, Stmt},
     parser::lookups::Precedence,
     tokens::{Token, TokenInfo, TokenType},
     utils::Spanned,
 };
-use std::collections::HashMap;
 
 type PrefixParseFn = fn(&mut Parser) -> Expression;
 type InfixParseFn = fn(&mut Parser, Expression) -> Expression;
@@ -27,7 +28,17 @@ impl Parser {
             nud_parse_fns: HashMap::new(),
             stmt_parse_fns: HashMap::new(),
         };
+
         parser.register_nud(TokenType::Integer, Parser::parse_integer);
+        parser.register_nud(TokenType::Float, Parser::parse_float);
+        parser.register_nud(TokenType::False, Parser::parse_bool);
+        parser.register_nud(TokenType::True, Parser::parse_bool);
+        parser.register_nud(TokenType::Identifier, Parser::parse_identifier);
+        parser.register_nud(TokenType::String, Parser::parse_string);
+
+        parser.register_nud(TokenType::Minus, Parser::parse_unary);
+        parser.register_nud(TokenType::Not, Parser::parse_unary);
+
         parser
     }
 
@@ -44,7 +55,7 @@ impl Parser {
     }
 
     fn advance(&mut self) {
-        if !self.is_eof() {
+        if self.current < self.tokens.len() - 1 {
             self.current += 1;
         }
     }
@@ -58,23 +69,24 @@ impl Parser {
         true
     }
 
-    fn expect_one(&mut self, token_types: Vec<TokenType>) -> bool {
-        for tok_type in token_types {
-            if self.current_token().token.get_type() == tok_type {
+    fn expect_delimiter(&mut self) -> bool {
+        match self.current_token().token.get_type() {
+            TokenType::EndOfFile | TokenType::Semicolon | TokenType::Newline => {
                 self.current += 1;
-                return true;
+                true
             }
+            _ => false,
         }
-
-        false
     }
 
     fn current_token(&self) -> &TokenInfo {
-        &self.tokens[self.current]
+        self.tokens
+            .get(self.current)
+            .unwrap_or_else(|| self.tokens.last().expect("Token vector is empty!"))
     }
 
     fn is_eof(&self) -> bool {
-        self.current >= self.tokens.len()
+        self.current_token().token == Token::EndOfFile
     }
 
     pub fn parse_program(&mut self) -> Program {
@@ -94,9 +106,9 @@ impl Parser {
             }
 
             _ => {
-                let span = self.current_token().span;
+                let span = self.current_token().span.clone();
                 let expr = self.parse_expression(Precedence::Default);
-                self.expect_one(TokenType::get_delimiters());
+                self.expect_delimiter();
 
                 let expr_stmt = Stmt::Expression { expression: expr };
 
@@ -114,6 +126,7 @@ impl Parser {
         let token_type = self.current_token().token.get_type();
         let prefix_fn = match self.nud_parse_fns.get(&token_type) {
             Some(f) => *f,
+            // TODO: Throw proper error with the language's error handler
             None => panic!("No prefix parse function for token {:?}", token_type),
         };
 
@@ -144,12 +157,77 @@ impl Parser {
             Token::Integer(n) => n,
             _ => unreachable!(),
         };
-        let expr = Expr::IntegerLiteral(value);
-        let spanned_expr = Spanned {
-            node: expr,
-            span: token_info.span.clone(),
-        };
+
+        let expr = Expr::IntegerLiteral(value).spanned(token_info.span);
+
         self.advance();
-        spanned_expr
+        expr
+    }
+
+    pub fn parse_float(&mut self) -> Expression {
+        let token_info = self.current_token();
+        let value = match token_info.token {
+            Token::Float(n) => n,
+            _ => unreachable!(),
+        };
+
+        let expr = Expr::FloatLiteral(value).spanned(token_info.span);
+
+        self.advance();
+        expr
+    }
+
+    pub fn parse_bool(&mut self) -> Expression {
+        let token_info = self.current_token();
+        let value = match token_info.token {
+            Token::True => true,
+            Token::False => false,
+            _ => unreachable!(),
+        };
+
+        let expr = Expr::BooleanLiteral(value).spanned(token_info.span);
+
+        self.advance();
+        expr
+    }
+
+    pub fn parse_identifier(&mut self) -> Expression {
+        let token_info = self.current_token();
+        let ident = match token_info.token.clone() {
+            Token::Identifier(name) => name,
+            _ => unreachable!(),
+        };
+
+        let expr = Expr::Identifier(ident).spanned(token_info.span);
+
+        self.advance();
+        expr
+    }
+
+    pub fn parse_string(&mut self) -> Expression {
+        let token_info = self.current_token();
+        let ident = match token_info.token.clone() {
+            Token::String(name) => name,
+            _ => unreachable!(),
+        };
+
+        let expr = Expr::StringLiteral(ident).spanned(token_info.span);
+
+        self.advance();
+        expr
+    }
+
+    pub fn parse_unary(&mut self) -> Expression {
+        let operator_info = self.current_token().clone();
+        self.advance(); // Eat operator
+
+        let value = self.parse_expression(Precedence::Default);
+        let expr = Expr::Unary {
+            operator: operator_info.token,
+            right: Box::new(value),
+        }
+        .spanned(operator_info.span);
+
+        expr
     }
 }

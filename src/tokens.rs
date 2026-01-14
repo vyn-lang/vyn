@@ -124,16 +124,6 @@ pub enum TokenType {
     Return,
 }
 
-impl TokenType {
-    pub fn get_delimiters() -> Vec<TokenType> {
-        vec![
-            TokenType::EndOfFile,
-            TokenType::Semicolon,
-            TokenType::Newline,
-        ]
-    }
-}
-
 impl Token {
     pub fn lookup_identifier(identifier: &str) -> Token {
         match identifier {
