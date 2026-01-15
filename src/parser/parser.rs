@@ -58,7 +58,7 @@ impl Parser {
         let mut body: Vec<Statement> = Vec::new();
 
         while !self.is_eof() {
-            match self.parse_statement() {
+            match self.try_parse_statement() {
                 Some(stmt) => body.push(stmt),
                 None => {
                     // Advance to next statement
@@ -182,7 +182,7 @@ impl Parser {
         Some(left)
     }
 
-    fn parse_statement(&mut self) -> Option<Statement> {
+    fn try_parse_statement(&mut self) -> Option<Statement> {
         let stmt_type = self.current_token().token.get_type();
 
         // Try to parse as a statemen

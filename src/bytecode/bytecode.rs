@@ -3,27 +3,29 @@ use num_enum::IntoPrimitive;
 
 #[derive(IntoPrimitive, Clone, Copy)]
 #[repr(u8)]
-enum OpCode {
+pub enum OpCode {
     Halt = 0x01,
     Pop = 0x02,
     LoadConstant = 0x03,
 }
 
-struct Definition {
-    name: &'static str,
-    operands_width: Vec<usize>,
+pub struct Definition {
+    pub name: &'static str,
+    pub operands_width: Vec<usize>,
 }
 
+pub type Instructions = Vec<u8>;
+
 impl OpCode {
-    pub fn make(opcode: OpCode, operands: Vec<i32>) {
+    pub fn make(opcode: OpCode, operands: Vec<usize>) -> Instructions {
         let definition = OpCode::get_definition(opcode);
-        let mut instruction_length: usize = 1; /* 1 for opcode itself */
+        let mut instruction_length = 1; /* 1 for opcode itself */
 
         for width in definition.operands_width.iter() {
             instruction_length += width;
         }
 
-        let mut instructions: Vec<u8> = vec![0; instruction_length];
+        let mut instructions: Instructions = vec![0; instruction_length];
         instructions[0] = opcode.into();
 
         let mut offset = 1;
@@ -40,9 +42,11 @@ impl OpCode {
 
             offset += width;
         }
+
+        instructions
     }
 
-    fn get_definition(opcode: OpCode) -> Definition {
+    pub fn get_definition(opcode: OpCode) -> Definition {
         match opcode {
             OpCode::LoadConstant => Definition {
                 name: "LOAD_CONSTANT",
@@ -60,7 +64,7 @@ impl OpCode {
     }
 }
 
-trait ToOpcode {
+pub trait ToOpcode {
     fn to_opcode(self) -> OpCode;
 }
 
@@ -74,4 +78,8 @@ impl ToOpcode for u8 {
             _ => unreachable!("Cannot convert byte '{}' to an opcode", self),
         }
     }
+}
+
+pub fn read_uint16(instructions: &Instructions, offset: usize) -> u16 {
+    BigEndian::read_u16(&instructions[offset..offset + 2])
 }

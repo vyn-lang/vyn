@@ -1,8 +1,9 @@
-use crate::{tokens::TokenType, utils::Span};
+use crate::{ast::Node, tokens::TokenType, utils::Span};
 use colored::*;
 
 #[derive(Debug, Clone)]
 pub enum HydorError {
+    // ----- Parser -----
     UnexpectedToken {
         token: TokenType,
         span: Span,
@@ -12,6 +13,12 @@ pub enum HydorError {
         got: TokenType,
         span: Span,
     },
+
+    // ----- Compiler -----
+    UnknownAST {
+        node: Node,
+        span: Span,
+    },
 }
 
 impl HydorError {
@@ -19,6 +26,8 @@ impl HydorError {
         match self {
             HydorError::UnexpectedToken { span, .. } => *span,
             HydorError::ExpectedToken { span, .. } => *span,
+
+            HydorError::UnknownAST { span, .. } => *span,
         }
     }
 
@@ -26,6 +35,8 @@ impl HydorError {
         match self {
             HydorError::UnexpectedToken { .. } => "Syntax",
             HydorError::ExpectedToken { .. } => "Syntax",
+
+            HydorError::UnknownAST { .. } => "AST",
         }
     }
 
@@ -37,6 +48,14 @@ impl HydorError {
             HydorError::ExpectedToken { expected, got, .. } => {
                 format!("Expected '{:?}', but found '{:?}'", expected, got)
             }
+            HydorError::UnknownAST { node, .. } => match node {
+                Node::Statement(s) => {
+                    format!("Cannot compile AST statement\n\n{:#?}", s)
+                }
+                Node::Expression(e) => {
+                    format!("Cannot compile AST expression\n\n{:#?}", e)
+                }
+            },
         }
     }
 
@@ -49,11 +68,10 @@ impl HydorError {
                 "Try replacing '{:?}' with '{:?}' or insert '{:?}' before '{:?}'",
                 got, expected, expected, got
             )),
+            HydorError::UnknownAST { .. } => {
+                Some(format!("Try defining a compiler for the given ast node"))
+            }
         }
-    }
-
-    pub fn is_fatal(&self) -> bool {
-        false
     }
 
     pub fn report(&self, source: &str) {
@@ -146,10 +164,6 @@ impl ErrorCollector {
 
     pub fn len(&self) -> usize {
         self.errors.len()
-    }
-
-    pub fn has_fatal_errors(&self) -> bool {
-        self.errors.iter().any(|e| e.is_fatal())
     }
 
     pub fn report_all(&self, source: &str) {

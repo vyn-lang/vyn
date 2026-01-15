@@ -12,6 +12,12 @@ pub type Expression = Spanned<Expr>;
 pub type Statement = Spanned<Stmt>;
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum Node {
+    Statement(Statement),
+    Expression(Expression),
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     IntegerLiteral(i32),
     FloatLiteral(f64),
@@ -59,3 +65,16 @@ impl Stmt {
         }
     }
 }
+
+impl Statement {
+    pub fn as_node(&self) -> Node {
+        Node::Statement(self.clone())
+    }
+}
+
+impl Expression {
+    pub fn as_node(&self) -> Node {
+        Node::Expression(self.clone())
+    }
+}
+

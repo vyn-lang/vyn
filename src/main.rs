@@ -4,8 +4,8 @@ use std::env;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() != 3 {
-        utils::throw_error("Usage: hydor run <path>", 0);
+    if args.len() < 3 {
+        utils::throw_error("Usage: hydor run <file>", 0);
     }
 
     let command = &args[1];
@@ -17,7 +17,7 @@ fn main() {
             run_file(content);
         }
         _ => {
-            utils::throw_error("Unknown command. Use: hydor run <path>", 1);
+            utils::throw_error("Unknown command. Use: hydor run <file>", 1);
         }
     }
 }
