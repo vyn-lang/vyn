@@ -1,10 +1,17 @@
 use hydor::{lexer::Lexer, parser::parser::Parser};
 
 fn main() {
-    let mut lexer = Lexer::new("-----20");
+    let source = r#"
+not not 10+0   "random string"
++10 // incomplete arithmetic expr
+        "#;
+    let mut lexer = Lexer::new(source);
     let mut parser = Parser::new(lexer.tokenize());
+    let result = parser.parse_program();
 
-    let ast = parser.parse_program();
-
-    println!("{ast:#?}");
+    if result.is_ok() {
+        println!("{:#?}", result.program);
+    } else {
+        result.errors.report_all(source);
+    }
 }

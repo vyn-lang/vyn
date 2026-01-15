@@ -2,11 +2,13 @@ use crate::{
     tokens::{Token, TokenInfo},
     utils::Span,
 };
+
 pub struct Lexer {
     input: Vec<char>,
-    position: usize, // current position
-    line: usize,     // current line
-    column: usize,   // current column
+    position: usize,
+    line: usize,
+    column: usize,
+    last_token: Option<Token>, // Track last emitted token
 }
 
 impl Lexer {
@@ -16,6 +18,7 @@ impl Lexer {
             position: 0,
             line: 1,
             column: 1,
+            last_token: None,
         }
     }
 
@@ -29,7 +32,7 @@ impl Lexer {
 
     fn advance(&mut self) -> Option<char> {
         let ch = self.current_char()?;
-        self.position += ch.len_utf8();
+        self.position += 1;
 
         if ch == '\n' {
             self.line += 1;
@@ -52,10 +55,16 @@ impl Lexer {
         }
     }
 
+    /// Skip a single-line comment (// ...)
     fn skip_comment(&mut self) {
+        // Skip the two slashes
+        self.advance(); // first /
+        self.advance(); // second /
+        
+        // Skip until newline or EOF
         while let Some(ch) = self.current_char() {
             if ch == '\n' {
-                break;
+                break; // Don't consume the newline
             }
             self.advance();
         }
@@ -104,12 +113,12 @@ impl Lexer {
     }
 
     fn read_string(&mut self) -> Token {
-        self.advance(); // skip opening
+        self.advance(); // skip opening quote
         let mut string = String::new();
 
         while let Some(ch) = self.current_char() {
             if ch == '"' || ch == '\'' {
-                self.advance(); // skip closing 
+                self.advance(); // skip closing quote
                 return Token::String(string);
             }
 
@@ -121,6 +130,7 @@ impl Lexer {
                         't' => string.push('\t'),
                         'r' => string.push('\r'),
                         '"' => string.push('"'),
+                        '\'' => string.push('\''),
                         '\\' => string.push('\\'),
                         _ => {
                             string.push('\\');
@@ -141,7 +151,7 @@ impl Lexer {
 
     fn match_char(&mut self, expected: char) -> bool {
         if self.peek_char() == Some(expected) {
-            self.advance(); // consume the peeked character
+            self.advance();
             true
         } else {
             false
@@ -151,6 +161,12 @@ impl Lexer {
     pub fn next_token(&mut self) -> TokenInfo {
         self.skip_whitespace();
 
+        // Check for comments
+        if self.current_char() == Some('/') && self.peek_char() == Some('/') {
+            self.skip_comment();
+            return self.next_token();
+        }
+
         let start_line = self.line;
         let start_column = self.column;
 
@@ -158,14 +174,13 @@ impl Lexer {
             None => Token::EndOfFile,
 
             Some('\n') => {
+                // Skip consecutive newlines - only emit one Newline token
+                if matches!(self.last_token, Some(Token::Newline)) {
+                    self.advance();
+                    return self.next_token();
+                }
                 self.advance();
                 Token::Newline
-            }
-
-            // Comments
-            Some('/') if self.peek_char() == Some('/') => {
-                self.skip_comment();
-                return self.next_token(); // recursively get next token
             }
 
             // Single-character tokens
@@ -284,7 +299,10 @@ impl Lexer {
             }
         };
 
-        let end_column = self.column - 1;
+        let end_column = self.column;
+
+        // Track last token to avoid consecutive newlines
+        self.last_token = Some(token.clone());
 
         TokenInfo {
             token,
@@ -302,6 +320,12 @@ impl Lexer {
         loop {
             let token_info = self.next_token();
             let is_eof = token_info.token == Token::EndOfFile;
+            
+            // Skip leading newlines at start of file
+            if tokens.is_empty() && token_info.token == Token::Newline {
+                continue;
+            }
+            
             tokens.push(token_info);
 
             if is_eof {

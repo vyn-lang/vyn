@@ -65,7 +65,7 @@ pub enum Token {
     Return,
 }
 
-#[derive(Eq, PartialEq, Hash, Debug)]
+#[derive(Eq, PartialEq, Hash, Debug, Clone)]
 pub enum TokenType {
     // Literals
     Integer,

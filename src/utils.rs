@@ -10,3 +10,9 @@ pub struct Spanned<T> {
     pub node: T,
     pub span: Span,
 }
+
+impl<T> Spanned<T> {
+    pub fn unspan(self) -> T {
+        self.node
+    }
+}

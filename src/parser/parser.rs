@@ -2,21 +2,36 @@ use std::collections::HashMap;
 
 use crate::{
     ast::{Expr, Expression, Program, Statement, Stmt},
+    errors::{ErrorCollector, HydorError},
     parser::lookups::Precedence,
     tokens::{Token, TokenInfo, TokenType},
     utils::Spanned,
 };
 
-type PrefixParseFn = fn(&mut Parser) -> Expression;
-type InfixParseFn = fn(&mut Parser, Expression) -> Expression;
-type StatementParseFn = fn(&mut Parser) -> Statement;
+type PrefixParseFn = fn(&mut Parser) -> Option<Expression>;
+type InfixParseFn = fn(&mut Parser, Expression) -> Option<Expression>;
+type StatementParseFn = fn(&mut Parser) -> Option<Statement>;
 
 pub struct Parser {
     tokens: Vec<TokenInfo>,
     current: usize,
+
     pub led_parse_fns: HashMap<TokenType, InfixParseFn>,
     pub nud_parse_fns: HashMap<TokenType, PrefixParseFn>,
     pub stmt_parse_fns: HashMap<TokenType, StatementParseFn>,
+
+    pub errors: ErrorCollector,
+}
+
+pub struct ParseOutput {
+    pub program: Program,
+    pub errors: ErrorCollector,
+}
+
+impl ParseOutput {
+    pub fn is_ok(&self) -> bool {
+        !self.errors.has_errors()
+    }
 }
 
 impl Parser {
@@ -24,22 +39,45 @@ impl Parser {
         let mut parser = Self {
             tokens,
             current: 0,
+            errors: ErrorCollector::new(),
             led_parse_fns: HashMap::new(),
             nud_parse_fns: HashMap::new(),
             stmt_parse_fns: HashMap::new(),
         };
 
-        parser.register_nud(TokenType::Integer, Parser::parse_integer);
-        parser.register_nud(TokenType::Float, Parser::parse_float);
-        parser.register_nud(TokenType::False, Parser::parse_bool);
-        parser.register_nud(TokenType::True, Parser::parse_bool);
-        parser.register_nud(TokenType::Identifier, Parser::parse_identifier);
-        parser.register_nud(TokenType::String, Parser::parse_string);
+        parser.register_nud(TokenType::Integer, Parser::parse_integer_literal);
+        parser.register_nud(TokenType::Float, Parser::parse_float_literal);
+        parser.register_nud(TokenType::False, Parser::parse_bool_literal);
+        parser.register_nud(TokenType::True, Parser::parse_bool_literal);
+        parser.register_nud(TokenType::Identifier, Parser::parse_identifier_literal);
+        parser.register_nud(TokenType::String, Parser::parse_string_literal);
 
-        parser.register_nud(TokenType::Minus, Parser::parse_unary);
-        parser.register_nud(TokenType::Not, Parser::parse_unary);
+        parser.register_nud(TokenType::Minus, Parser::parse_unary_expr);
+        parser.register_nud(TokenType::Not, Parser::parse_unary_expr);
+        parser.register_nud(TokenType::LeftParenthesis, Parser::parse_grouping_expr);
+
+        parser.register_led(TokenType::Plus, Parser::parse_binary_expr);
 
         parser
+    }
+
+    pub fn parse_program(&mut self) -> ParseOutput {
+        let mut body: Vec<Statement> = Vec::new();
+
+        while !self.is_eof() {
+            match self.parse_statement() {
+                Some(stmt) => body.push(stmt),
+                None => {
+                    // Advance to next statement
+                    self.advance();
+                }
+            }
+        }
+
+        ParseOutput {
+            program: Program { statements: body },
+            errors: std::mem::take(&mut self.errors),
+        }
     }
 
     fn register_nud(&mut self, token: TokenType, func: PrefixParseFn) {
@@ -62,6 +100,13 @@ impl Parser {
 
     fn expect(&mut self, token_type: TokenType) -> bool {
         if self.current_token().token.get_type() != token_type {
+            let expect_err_msg = HydorError::ExpectedToken {
+                expected: token_type,
+                got: self.current_token().token.get_type(),
+                span: self.current_token().span,
+            };
+
+            self.errors.add(expect_err_msg);
             return false;
         }
 
@@ -72,70 +117,61 @@ impl Parser {
     fn expect_delimiter(&mut self) -> bool {
         match self.current_token().token.get_type() {
             TokenType::EndOfFile | TokenType::Semicolon | TokenType::Newline => {
-                self.current += 1;
+                while matches!(
+                    self.current_token().token.get_type(),
+                    TokenType::Semicolon | TokenType::Newline
+                ) {
+                    self.advance();
+                }
+
                 true
             }
-            _ => false,
+            _ => {
+                let expect_err_msg = HydorError::ExpectedToken {
+                    expected: TokenType::Semicolon,
+                    got: self.current_token().token.get_type(),
+                    span: self.current_token().span,
+                };
+
+                self.errors.add(expect_err_msg);
+                false
+            }
         }
     }
 
     fn current_token(&self) -> &TokenInfo {
         self.tokens
             .get(self.current)
-            .unwrap_or_else(|| self.tokens.last().expect("Token vector is empty!"))
+            .unwrap_or_else(|| self.tokens.last().expect("Token vector is empty!")) // unreachable, but just in case
     }
 
     fn is_eof(&self) -> bool {
-        self.current_token().token == Token::EndOfFile
+        self.current_token().token == Token::EndOfFile || self.current >= self.tokens.len()
     }
 
-    pub fn parse_program(&mut self) -> Program {
-        let mut body: Vec<Statement> = Vec::new();
-        while !self.is_eof() {
-            let stmt = self.parse_statement();
-            body.push(stmt);
-        }
-        Program { statements: body }
-    }
-
-    fn parse_statement(&mut self) -> Statement {
-        let stmt_type = self.current_token().token.get_type();
-        let stmt_fn = match self.stmt_parse_fns.get(&stmt_type) {
-            Some(f) => {
-                return f(self);
-            }
-
-            _ => {
-                let span = self.current_token().span.clone();
-                let expr = self.parse_expression(Precedence::Default);
-                self.expect_delimiter();
-
-                let expr_stmt = Stmt::Expression { expression: expr };
-
-                Spanned {
-                    node: expr_stmt,
-                    span,
-                }
-            }
-        };
-
-        stmt_fn
-    }
-
-    pub fn parse_expression(&mut self, precedence: Precedence) -> Expression {
+    pub fn try_parse_expression(&mut self, precedence: Precedence) -> Option<Expression> {
         let token_type = self.current_token().token.get_type();
+
+        // Get prefix parser function
         let prefix_fn = match self.nud_parse_fns.get(&token_type) {
             Some(f) => *f,
-            // TODO: Throw proper error with the language's error handler
-            None => panic!("No prefix parse function for token {:?}", token_type),
+            None => {
+                self.errors.add(HydorError::UnexpectedToken {
+                    token: token_type,
+                    span: self.current_token().span,
+                });
+                return None;
+            }
         };
 
-        let mut left = prefix_fn(self);
+        let mut left = prefix_fn(self)?;
 
+        // Parse infix expressions
         while !self.is_eof() {
             let token_type = self.current_token().token.get_type();
             let next_prec =
                 Precedence::get_token_precedence(&token_type).unwrap_or(Precedence::Default);
+
             if precedence >= next_prec {
                 break;
             }
@@ -145,13 +181,39 @@ impl Parser {
                 None => break,
             };
 
-            left = infix_fn(self, left);
+            left = infix_fn(self, left)?;
         }
 
-        left
+        Some(left)
     }
 
-    pub fn parse_integer(&mut self) -> Expression {
+    fn parse_statement(&mut self) -> Option<Statement> {
+        let stmt_type = self.current_token().token.get_type();
+
+        // Try to parse as a statemen
+        if let Some(stmt_fn) = self.stmt_parse_fns.get(&stmt_type) {
+            return stmt_fn(self);
+        }
+
+        // expression statement
+        let start = self.current_token().clone();
+
+        let expr = self.try_parse_expression(Precedence::Default)?;
+
+        self.expect_delimiter();
+
+        Some(Spanned {
+            node: Stmt::Expression { expression: expr },
+            span: start.span,
+        })
+    }
+}
+
+// ------------------- EXPRESSIONS -------------------
+
+impl Parser {
+    // ------------------- Null Denoted Expressions -------------------
+    pub fn parse_integer_literal(&mut self) -> Option<Expression> {
         let token_info = self.current_token();
         let value = match token_info.token {
             Token::Integer(n) => n,
@@ -161,10 +223,10 @@ impl Parser {
         let expr = Expr::IntegerLiteral(value).spanned(token_info.span);
 
         self.advance();
-        expr
+        Some(expr)
     }
 
-    pub fn parse_float(&mut self) -> Expression {
+    pub fn parse_float_literal(&mut self) -> Option<Expression> {
         let token_info = self.current_token();
         let value = match token_info.token {
             Token::Float(n) => n,
@@ -174,10 +236,10 @@ impl Parser {
         let expr = Expr::FloatLiteral(value).spanned(token_info.span);
 
         self.advance();
-        expr
+        Some(expr)
     }
 
-    pub fn parse_bool(&mut self) -> Expression {
+    pub fn parse_bool_literal(&mut self) -> Option<Expression> {
         let token_info = self.current_token();
         let value = match token_info.token {
             Token::True => true,
@@ -188,10 +250,10 @@ impl Parser {
         let expr = Expr::BooleanLiteral(value).spanned(token_info.span);
 
         self.advance();
-        expr
+        Some(expr)
     }
 
-    pub fn parse_identifier(&mut self) -> Expression {
+    pub fn parse_identifier_literal(&mut self) -> Option<Expression> {
         let token_info = self.current_token();
         let ident = match token_info.token.clone() {
             Token::Identifier(name) => name,
@@ -201,10 +263,10 @@ impl Parser {
         let expr = Expr::Identifier(ident).spanned(token_info.span);
 
         self.advance();
-        expr
+        Some(expr)
     }
 
-    pub fn parse_string(&mut self) -> Expression {
+    pub fn parse_string_literal(&mut self) -> Option<Expression> {
         let token_info = self.current_token();
         let ident = match token_info.token.clone() {
             Token::String(name) => name,
@@ -214,20 +276,53 @@ impl Parser {
         let expr = Expr::StringLiteral(ident).spanned(token_info.span);
 
         self.advance();
-        expr
+        Some(expr)
     }
 
-    pub fn parse_unary(&mut self) -> Expression {
+    pub fn parse_unary_expr(&mut self) -> Option<Expression> {
         let operator_info = self.current_token().clone();
         self.advance(); // Eat operator
 
-        let value = self.parse_expression(Precedence::Default);
+        let value = self.try_parse_expression(Precedence::Unary)?;
         let expr = Expr::Unary {
             operator: operator_info.token,
             right: Box::new(value),
         }
         .spanned(operator_info.span);
 
-        expr
+        Some(expr)
+    }
+
+    pub fn parse_grouping_expr(&mut self) -> Option<Expression> {
+        self.advance(); // Eat (
+        let expr = self.try_parse_expression(Precedence::Default)?;
+
+        if !self.expect(TokenType::RightParenthesis) {
+            return None;
+        }
+
+        Some(expr)
+    }
+
+    // ------------------- Left Denoted Expressions -------------------
+    pub fn parse_binary_expr(&mut self, left: Expression) -> Option<Expression> {
+        let operator_info = self.current_token().clone();
+        let operator_precedence =
+            match Precedence::get_token_precedence(&operator_info.token.get_type()) {
+                Some(p) => p,
+                _ => Precedence::Default,
+            };
+
+        self.advance(); // Eat operator
+
+        let right = self.try_parse_expression(operator_precedence)?;
+        let expr = Expr::BinaryOperation {
+            left: Box::new(left),
+            operator: operator_info.token.clone(),
+            right: Box::new(right),
+        }
+        .spanned(operator_info.span);
+
+        Some(expr)
     }
 }
