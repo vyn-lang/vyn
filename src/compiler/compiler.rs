@@ -191,7 +191,7 @@ impl Compiler {
         }
     }
 
-    /// Emit an instruction with span tracking (RLE compression happens here)
+    /// Emit an instruction with span tracking
     fn emit(&mut self, opcode: OpCode, operands: Vec<usize>, span: Span) -> usize {
         let instruction = OpCode::make(opcode, operands);
         let position = self.add_instruction(instruction, span);
@@ -217,22 +217,17 @@ impl Compiler {
             let offset = self.instructions.len();
 
             // Only add if values changed from last entry
-            if self.should_add_line_change(offset, span.line) {
+            if self.should_add_line_change(span.line) {
                 self.debug_info.line_changes.push((offset, span.line));
             }
 
-            if self.should_add_col_change(
-                &self.debug_info.start_col_changes,
-                offset,
-                span.start_column,
-            ) {
+            if self.should_add_col_change(&self.debug_info.start_col_changes, span.start_column) {
                 self.debug_info
                     .start_col_changes
                     .push((offset, span.start_column));
             }
 
-            if self.should_add_col_change(&self.debug_info.end_col_changes, offset, span.end_column)
-            {
+            if self.should_add_col_change(&self.debug_info.end_col_changes, span.end_column) {
                 self.debug_info
                     .end_col_changes
                     .push((offset, span.end_column));
@@ -245,13 +240,13 @@ impl Compiler {
     }
 
     /// Check if we need to record a line change (for compression)
-    fn should_add_line_change(&self, offset: usize, line: u32) -> bool {
+    fn should_add_line_change(&self, line: u32) -> bool {
         self.debug_info.line_changes.is_empty()
             || self.debug_info.line_changes.last().unwrap().1 != line
     }
 
     /// Check if we need to record a column change (for compression)
-    fn should_add_col_change(&self, changes: &Vec<(usize, u32)>, offset: usize, col: u32) -> bool {
+    fn should_add_col_change(&self, changes: &Vec<(usize, u32)>, col: u32) -> bool {
         changes.is_empty() || changes.last().unwrap().1 != col
     }
 }
