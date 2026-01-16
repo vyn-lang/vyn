@@ -148,14 +148,21 @@ impl Compiler {
                 self.emit(OpCode::LoadConstant, vec![idx], span);
             }
 
-            Expr::BooleanLiteral(v) => {
-                let idx = self.add_constant(RuntimeValue::BooleanLiteral(v));
-                self.emit(OpCode::LoadConstant, vec![idx], span);
+            Expr::BooleanLiteral(truethy) => {
+                if truethy {
+                    self.emit(OpCode::LoadBoolTrue, vec![], span);
+                } else {
+                    self.emit(OpCode::LoadBoolFalse, vec![], span);
+                }
             }
 
             Expr::StringLiteral(v) => {
                 let str_idx = self.intern_string(v);
                 self.emit(OpCode::LoadString, vec![str_idx], span);
+            }
+
+            Expr::NilLiteral => {
+                self.emit(OpCode::LoadNil, vec![], span);
             }
 
             Expr::Unary { operator, right } => {

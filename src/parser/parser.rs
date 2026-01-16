@@ -43,6 +43,7 @@ impl Parser {
         parser.register_nud(TokenType::True, Parser::parse_bool_literal);
         parser.register_nud(TokenType::Identifier, Parser::parse_identifier_literal);
         parser.register_nud(TokenType::String, Parser::parse_string_literal);
+        parser.register_nud(TokenType::Nil, Parser::parse_nil_literal);
 
         parser.register_nud(TokenType::Minus, Parser::parse_unary_expr);
         parser.register_nud(TokenType::Not, Parser::parse_unary_expr);
@@ -322,6 +323,14 @@ impl Parser {
         let expr = Expr::StringLiteral(ident).spanned(token_info.span);
 
         self.advance();
+        Some(expr)
+    }
+
+    pub fn parse_nil_literal(&mut self) -> Option<Expression> {
+        let token_info = self.current_token();
+        let expr = Expr::NilLiteral.spanned(token_info.span);
+
+        self.advance(); // Eat token
         Some(expr)
     }
 

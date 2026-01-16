@@ -4,6 +4,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::{collections::HashMap, process};
 
+use crate::runtime_value::RuntimeValue;
 use crate::{
     compiler::{
         compiler::{Bytecode, Compiler},
@@ -131,7 +132,7 @@ fn command_help(_args: &[String]) {
 
     for cmd in cmd_list {
         println!(
-            "  {:<25} {}",
+            "  {:<40} {}",
             format!("hydor {}", cmd.usage).cyan(),
             cmd.description.bright_black()
         );
@@ -156,6 +157,10 @@ fn command_help(_args: &[String]) {
 }
 
 fn command_run(args: &[String]) {
+    /* NOTE: This abomination is not permanent
+     * Lets just stick with this until functions came into play
+     * and we can finally refactor this
+     * */
     let path = &args[0];
 
     let source = utils::read_file(path.to_string());
@@ -181,7 +186,16 @@ fn command_run(args: &[String]) {
     let mut vm = HydorVM::new(bytecode);
     match vm.execute_bytecode() {
         Ok(()) => match vm.last_popped() {
-            Some(e) => println!("Last popped: {e:?}"),
+            Some(e) => match e {
+                RuntimeValue::StringLiteral(s) => {
+                    let val = HydorVM::resolve_string(&vm, s);
+                    println!("Last popped: String({val})")
+                }
+                _ => {
+                    println!("Last popped: {e:?}");
+                    process::exit(0)
+                }
+            },
             None => {
                 print_info("No last element found");
                 process::exit(0);
@@ -212,12 +226,28 @@ fn detect_file_type(path: &str) -> FileType {
 fn command_disassemble(args: &[String]) {
     let path = &args[0];
 
-    print_info(&format!("Compiling '{}'", path));
-    let source = utils::read_file(path.to_string());
-    let bytecode = compile_source(&source);
-
-    println!();
-    disassemble(&bytecode);
+    match detect_file_type(path) {
+        FileType::Bytecode => {
+            print_info(&format!("Loading bytecode from '{}'", path));
+            let bytecode = match Bytecode::load_from_file(path) {
+                Ok(bc) => bc,
+                Err(err) => throw_error(&format!("Failed to load bytecode: {}", err), 1),
+            };
+            println!();
+            disassemble(&bytecode);
+        }
+        FileType::Source => {
+            print_info(&format!("Compiling '{}'", path));
+            let source = utils::read_file(path.to_string());
+            let bytecode = compile_source(&source);
+            println!();
+            disassemble(&bytecode);
+        }
+        FileType::Unknown => throw_error(
+            "File is neither valid Hydor source (.hyd) nor bytecode (.hydc)",
+            1,
+        ),
+    }
 }
 
 fn command_build(args: &[String]) {

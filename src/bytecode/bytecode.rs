@@ -18,6 +18,9 @@ pub enum OpCode {
 
     LoadConstant = 0x03,
     LoadString = 0xB,
+    LoadNil = 0xC,
+    LoadBoolTrue = 0xD,
+    LoadBoolFalse = 0xE,
 }
 
 pub struct Definition {
@@ -66,6 +69,18 @@ impl OpCode {
             OpCode::LoadString => Definition {
                 name: "LOAD_STRING",
                 operands_width: vec![2],
+            },
+            OpCode::LoadNil => Definition {
+                name: "LOAD_NIL",
+                operands_width: vec![],
+            },
+            OpCode::LoadBoolTrue => Definition {
+                name: "LOAD_BOOL_TRUE",
+                operands_width: vec![],
+            },
+            OpCode::LoadBoolFalse => Definition {
+                name: "LOAD_BOOL_FALSE",
+                operands_width: vec![],
             },
             OpCode::Halt => Definition {
                 name: "HALT",
@@ -125,6 +140,9 @@ impl ToOpcode for u8 {
             0x09 => OpCode::UnaryNegate,
             0xA => OpCode::UnaryNot,
             0xB => OpCode::LoadString,
+            0xC => OpCode::LoadNil,
+            0xD => OpCode::LoadBoolTrue,
+            0xE => OpCode::LoadBoolFalse,
 
             _ => unreachable!("Cannot convert byte '{}' to an opcode", self),
         }

@@ -5,7 +5,6 @@ pub mod compiler;
 pub mod errors;
 pub mod lexer;
 pub mod parser;
-pub mod run;
 pub mod runtime_value;
 pub mod tokens;
 pub mod utils;

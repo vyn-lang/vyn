@@ -1,7 +1,7 @@
 use colored::Colorize;
 use std::{fs, io::ErrorKind, process};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Span {
     pub line: u32,
     pub start_column: u32,

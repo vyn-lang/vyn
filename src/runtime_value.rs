@@ -4,15 +4,78 @@ pub enum RuntimeValue {
     FloatLiteral(f64),
     BooleanLiteral(bool),
     StringLiteral(usize), // Accessed via string table
+    NilLiteral,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RuntimeType {
+    Integer,
+    Float,
+    Boolean,
+    String,
+    Nil,
+}
+
+impl RuntimeType {
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            RuntimeType::Integer => "integer",
+            RuntimeType::Float => "float",
+            RuntimeType::Boolean => "boolean",
+            RuntimeType::String => "string",
+            RuntimeType::Nil => "nil",
+        }
+    }
 }
 
 impl RuntimeValue {
-    pub fn type_name(&self) -> &'static str {
+    pub fn as_int(&self) -> Option<i32> {
         match self {
-            RuntimeValue::IntegerLiteral(_) => "integer",
-            RuntimeValue::FloatLiteral(_) => "float",
-            RuntimeValue::BooleanLiteral(_) => "boolean",
-            RuntimeValue::StringLiteral(_) => "string",
+            RuntimeValue::IntegerLiteral(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            RuntimeValue::FloatLiteral(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            RuntimeValue::BooleanLiteral(b) => Some(*b),
+            _ => None,
+        }
+    }
+
+    pub fn as_string_index(&self) -> Option<usize> {
+        match self {
+            RuntimeValue::StringLiteral(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    pub fn is_nil(&self) -> bool {
+        matches!(self, RuntimeValue::NilLiteral)
+    }
+
+    pub fn as_number(&self) -> Option<f64> {
+        match self {
+            RuntimeValue::IntegerLiteral(n) => Some(*n as f64),
+            RuntimeValue::FloatLiteral(n) => Some(*n),
+            _ => None,
+        }
+    }
+
+    pub fn get_type(&self) -> RuntimeType {
+        match self {
+            RuntimeValue::IntegerLiteral(_) => RuntimeType::Integer,
+            RuntimeValue::FloatLiteral(_) => RuntimeType::Float,
+            RuntimeValue::BooleanLiteral(_) => RuntimeType::Boolean,
+            RuntimeValue::StringLiteral(_) => RuntimeType::String,
+            RuntimeValue::NilLiteral => RuntimeType::Nil,
         }
     }
 

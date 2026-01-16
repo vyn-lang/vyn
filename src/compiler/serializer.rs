@@ -129,14 +129,8 @@ impl Bytecode {
                 file.write_u8(ConstantType::Float.into())?;
                 file.write_f64::<BigEndian>(*v)?;
             }
-            RuntimeValue::BooleanLiteral(v) => {
-                file.write_u8(ConstantType::Boolean.into())?;
-                file.write_u8(*v as u8)?;
-            }
-            RuntimeValue::StringLiteral(idx) => {
-                file.write_u8(ConstantType::String.into())?;
-                file.write_u32::<BigEndian>(*idx as u32)?;
-            }
+
+            _ => unreachable!(),
         }
         Ok(())
     }

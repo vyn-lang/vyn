@@ -24,6 +24,7 @@ pub enum Expr {
     BooleanLiteral(bool),
     StringLiteral(String),
     Identifier(String),
+    NilLiteral,
 
     Unary {
         operator: Token,

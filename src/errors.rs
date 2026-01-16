@@ -1,4 +1,4 @@
-use crate::{ast::Node, tokens::TokenType, utils::Span};
+use crate::{ast::Node, runtime_value::RuntimeType, tokens::TokenType, utils::Span};
 use colored::*;
 
 #[derive(Debug, Clone)]
@@ -30,10 +30,16 @@ pub enum HydorError {
         span: Span,
     },
 
-    TypeError {
+    // ----- Arithmetic Errors -----
+    ArithmeticError {
         operation: String,
-        expected: String,
-        got: String,
+        left_type: RuntimeType,
+        right_type: RuntimeType,
+        span: Span,
+    },
+    UnaryOperationError {
+        operation: String,
+        operand_type: RuntimeType,
         span: Span,
     },
 }
@@ -48,7 +54,8 @@ impl HydorError {
 
             HydorError::StackUnderflow { span, .. } => *span,
             HydorError::StackOverflow { span, .. } => *span,
-            HydorError::TypeError { span, .. } => *span,
+            HydorError::ArithmeticError { span, .. } => *span,
+            HydorError::UnaryOperationError { span, .. } => *span,
         }
     }
 
@@ -61,7 +68,8 @@ impl HydorError {
 
             HydorError::StackUnderflow { .. } => "HydorVM",
             HydorError::StackOverflow { .. } => "HydorVM",
-            HydorError::TypeError { .. } => "TypeError",
+            HydorError::ArithmeticError { .. } => "Arithmetic",
+            HydorError::UnaryOperationError { .. } => "Arithmetic",
         }
     }
 
@@ -89,14 +97,37 @@ impl HydorError {
                 format!("Stack overflow! stack length: {}", stack_length)
             }
 
-            HydorError::TypeError {
+            HydorError::ArithmeticError {
                 operation,
-                expected,
-                got,
+                left_type,
+                right_type,
+                ..
+            } => {
+                if left_type == right_type {
+                    format!(
+                        "Cannot perform {} on type '{}'",
+                        operation,
+                        left_type.to_string()
+                    )
+                } else {
+                    format!(
+                        "Cannot perform {} between types '{}' and '{}'",
+                        operation,
+                        left_type.to_string(),
+                        right_type.to_string()
+                    )
+                }
+            }
+
+            HydorError::UnaryOperationError {
+                operation,
+                operand_type,
                 ..
             } => {
                 format!(
-                    "Cannot perform {operation}, expected type '{expected}' but got '{got}' instead"
+                    "Cannot perform {} on type '{}'",
+                    operation,
+                    operand_type.to_string()
                 )
             }
         }
@@ -117,8 +148,50 @@ impl HydorError {
             HydorError::StackUnderflow { .. } => None,
             HydorError::StackOverflow { .. } => None,
 
-            HydorError::TypeError { expected, got, .. } => {
-                Some(format!("Try converting type '{got}' to type '{expected}'"))
+            HydorError::ArithmeticError {
+                operation,
+                left_type,
+                right_type,
+                ..
+            } => {
+                let valid_types = match operation.as_str() {
+                    "addition" => "numbers or strings",
+                    "subtraction" | "multiplication" | "division" | "exponentiation" => "numbers",
+                    _ => "compatible types",
+                };
+
+                if left_type == right_type {
+                    Some(format!(
+                        "The '{}' operation requires {}, but '{}' is not supported",
+                        operation,
+                        valid_types,
+                        left_type.to_string()
+                    ))
+                } else {
+                    Some(format!(
+                        "The '{}' operation requires {}, ensure both operands are the same compatible type",
+                        operation, valid_types
+                    ))
+                }
+            }
+
+            HydorError::UnaryOperationError {
+                operation,
+                operand_type,
+                ..
+            } => {
+                let valid_type = match operation.as_str() {
+                    "negation" => "a number",
+                    "logical not" => "a boolean",
+                    _ => "a compatible type",
+                };
+
+                Some(format!(
+                    "The '{}' operation requires {}, but got '{}'",
+                    operation,
+                    valid_type,
+                    operand_type.to_string()
+                ))
             }
         }
     }
