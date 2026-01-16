@@ -1,14 +1,15 @@
 use byteorder::{BigEndian, ReadBytesExt};
 use colored::*;
-use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
+use std::{collections::HashMap, process};
 
 use crate::{
     compiler::{
         compiler::{Bytecode, Compiler},
         disassembler::disassemble,
     },
+    hydor_vm::vm::HydorVM,
     lexer::Lexer,
     parser::parser::Parser,
     utils::{self, print_info, print_success, throw_error},
@@ -157,6 +158,7 @@ fn command_help(_args: &[String]) {
 fn command_run(args: &[String]) {
     let path = &args[0];
 
+    let source = utils::read_file(path.to_string());
     let bytecode = match detect_file_type(path) {
         FileType::Bytecode => {
             print_info(&format!("Loading bytecode from '{}'", path));
@@ -167,7 +169,6 @@ fn command_run(args: &[String]) {
         }
         FileType::Source => {
             print_info(&format!("Compiling '{}'", path));
-            let source = utils::read_file(path.to_string());
             compile_source(&source)
         }
         FileType::Unknown => throw_error(
@@ -176,12 +177,18 @@ fn command_run(args: &[String]) {
         ),
     };
 
-    println!();
     print_success("Execution started");
-    println!();
-
-    // For now, just disassemble
-    disassemble(&bytecode);
+    let mut vm = HydorVM::new(bytecode);
+    match vm.execute_bytecode() {
+        Ok(()) => match vm.last_popped() {
+            Some(e) => println!("Last popped: {e:?}"),
+            None => {
+                print_info("No last element found");
+                process::exit(0);
+            }
+        },
+        Err(e) => e.report(&source),
+    }
 }
 
 fn detect_file_type(path: &str) -> FileType {

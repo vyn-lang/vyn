@@ -1,17 +1,18 @@
 use std::mem;
 
 use crate::{
-    ast::{Expr, Expression, Node, Program, Statement, Stmt},
+    ast::{Expr, Expression, Program, Statement, Stmt},
     bytecode::bytecode::{Instructions, OpCode},
     errors::{ErrorCollector, HydorError},
     runtime_value::RuntimeValue,
     tokens::TokenType,
-    utils::{Span, Spanned},
+    utils::Span,
 };
 
 pub struct Compiler {
     instructions: Instructions,
     constants: Vec<RuntimeValue>,
+    string_table: Vec<String>,
     debug_info: DebugInfo,
 
     errors: ErrorCollector,
@@ -20,6 +21,7 @@ pub struct Compiler {
 pub struct Bytecode {
     pub instructions: Instructions,
     pub constants: Vec<RuntimeValue>,
+    pub string_table: Vec<String>,
     pub debug_info: DebugInfo,
 }
 
@@ -78,6 +80,7 @@ impl Compiler {
         Self {
             instructions: Vec::new(),
             constants: Vec::new(),
+            string_table: Vec::new(),
             debug_info: DebugInfo::new(),
 
             errors: ErrorCollector::new(),
@@ -151,8 +154,8 @@ impl Compiler {
             }
 
             Expr::StringLiteral(v) => {
-                let idx = self.add_constant(RuntimeValue::StringLiteral(v));
-                self.emit(OpCode::LoadConstant, vec![idx], span);
+                let str_idx = self.intern_string(v);
+                self.emit(OpCode::LoadString, vec![str_idx], span);
             }
 
             Expr::Unary { operator, right } => {
@@ -197,10 +200,21 @@ impl Compiler {
         Some(())
     }
 
+    fn intern_string(&mut self, s: String) -> usize {
+        // Optional: deduplicate strings (more efficient)
+        if let Some(pos) = self.string_table.iter().position(|existing| existing == &s) {
+            return pos;
+        }
+
+        self.string_table.push(s);
+        self.string_table.len() - 1
+    }
+
     fn bytecode(&mut self) -> Bytecode {
         Bytecode {
             instructions: mem::take(&mut self.instructions),
             constants: mem::take(&mut self.constants),
+            string_table: mem::take(&mut self.string_table),
             debug_info: mem::take(&mut self.debug_info),
         }
     }

@@ -11,6 +11,8 @@ pub fn disassemble(bytecode: &Bytecode) {
     disassemble_instructions(&bytecode.instructions, &bytecode.debug_info);
     println!();
     disassemble_constants(&bytecode.constants);
+    println!();
+    disassemble_string_table(&bytecode.string_table);
 }
 
 fn disassemble_instructions(
@@ -65,7 +67,27 @@ fn disassemble_instructions(
 fn disassemble_constants(constants: &Vec<RuntimeValue>) {
     println!("{}", "--== Constants ==--".bright_yellow().bold());
 
+    if constants.is_empty() {
+        println!("{}", "No constants".white().dimmed())
+    }
+
     for (i, constant) in constants.iter().enumerate() {
+        println!(
+            "{} {}",
+            format!("{:#04x}", i).cyan(),
+            format!("{:?}", constant).bright_white()
+        );
+    }
+}
+
+fn disassemble_string_table(strings: &Vec<String>) {
+    println!("{}", "--== String Table ==--".bright_yellow().bold());
+
+    if strings.is_empty() {
+        println!("{}", "No strings".white().dimmed())
+    }
+
+    for (i, constant) in strings.iter().enumerate() {
         println!(
             "{} {}",
             format!("{:#04x}", i).cyan(),

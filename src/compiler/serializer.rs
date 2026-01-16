@@ -35,6 +35,13 @@ impl Bytecode {
         file.write_u32::<BigEndian>(self.instructions.len() as u32)?;
         file.write_all(&self.instructions)?;
 
+        // Write string table
+        file.write_u32::<BigEndian>(self.string_table.len() as u32)?;
+        for string in &self.string_table {
+            file.write_u32::<BigEndian>(string.len() as u32)?;
+            file.write_all(string.as_bytes())?;
+        }
+
         // Write constants count
         file.write_u32::<BigEndian>(self.constants.len() as u32)?;
 
@@ -58,7 +65,10 @@ impl Bytecode {
         if magic != MAGIC_NUMBER {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid magic number: expected {:#x}, got {:#x}", MAGIC_NUMBER, magic),
+                format!(
+                    "Invalid magic number: expected {:#x}, got {:#x}",
+                    MAGIC_NUMBER, magic
+                ),
             ));
         }
 
@@ -79,6 +89,18 @@ impl Bytecode {
         let mut instructions = vec![0u8; instructions_len];
         file.read_exact(&mut instructions)?;
 
+        // Read string table
+        let string_table_len = file.read_u32::<BigEndian>()? as usize;
+        let mut string_table = Vec::with_capacity(string_table_len);
+        for _ in 0..string_table_len {
+            let str_len = file.read_u32::<BigEndian>()? as usize;
+            let mut str_buf = vec![0u8; str_len];
+            file.read_exact(&mut str_buf)?;
+            let string = String::from_utf8(str_buf)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            string_table.push(string);
+        }
+
         // Read constants
         let constants_count = file.read_u32::<BigEndian>()? as usize;
         let mut constants = Vec::with_capacity(constants_count);
@@ -92,12 +114,12 @@ impl Bytecode {
         Ok(Bytecode {
             instructions,
             constants,
+            string_table,
             debug_info,
         })
     }
 
     fn write_constant(&self, file: &mut File, constant: &RuntimeValue) -> io::Result<()> {
-        // [ <OpCode>: [ operands ] ]
         match constant {
             RuntimeValue::IntegerLiteral(v) => {
                 file.write_u8(ConstantType::Integer.into())?;
@@ -111,10 +133,9 @@ impl Bytecode {
                 file.write_u8(ConstantType::Boolean.into())?;
                 file.write_u8(*v as u8)?;
             }
-            RuntimeValue::StringLiteral(s) => {
+            RuntimeValue::StringLiteral(idx) => {
                 file.write_u8(ConstantType::String.into())?;
-                file.write_u32::<BigEndian>(s.len() as u32)?;
-                file.write_all(s.as_bytes())?;
+                file.write_u32::<BigEndian>(*idx as u32)?;
             }
         }
         Ok(())
@@ -139,13 +160,8 @@ impl Bytecode {
                 Ok(RuntimeValue::BooleanLiteral(value != 0))
             }
             ConstantType::String => {
-                let len = file.read_u32::<BigEndian>()? as usize;
-                let mut str_buf = vec![0u8; len];
-                file.read_exact(&mut str_buf)?;
-                Ok(RuntimeValue::StringLiteral(
-                    String::from_utf8(str_buf)
-                        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
-                ))
+                let idx = file.read_u32::<BigEndian>()? as usize;
+                Ok(RuntimeValue::StringLiteral(idx))
             }
         }
     }

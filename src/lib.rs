@@ -9,3 +9,4 @@ pub mod run;
 pub mod runtime_value;
 pub mod tokens;
 pub mod utils;
+pub mod hydor_vm;

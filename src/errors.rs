@@ -19,6 +19,23 @@ pub enum HydorError {
         node: Node,
         span: Span,
     },
+
+    // ----- HydorVM -----
+    StackUnderflow {
+        stack_length: usize,
+        span: Span,
+    },
+    StackOverflow {
+        stack_length: usize,
+        span: Span,
+    },
+
+    TypeError {
+        operation: String,
+        expected: String,
+        got: String,
+        span: Span,
+    },
 }
 
 impl HydorError {
@@ -28,6 +45,10 @@ impl HydorError {
             HydorError::ExpectedToken { span, .. } => *span,
 
             HydorError::UnknownAST { span, .. } => *span,
+
+            HydorError::StackUnderflow { span, .. } => *span,
+            HydorError::StackOverflow { span, .. } => *span,
+            HydorError::TypeError { span, .. } => *span,
         }
     }
 
@@ -37,6 +58,10 @@ impl HydorError {
             HydorError::ExpectedToken { .. } => "Syntax",
 
             HydorError::UnknownAST { .. } => "AST",
+
+            HydorError::StackUnderflow { .. } => "HydorVM",
+            HydorError::StackOverflow { .. } => "HydorVM",
+            HydorError::TypeError { .. } => "TypeError",
         }
     }
 
@@ -56,6 +81,24 @@ impl HydorError {
                     format!("Cannot compile AST expression\n\n{:#?}", e)
                 }
             },
+
+            HydorError::StackUnderflow { stack_length, .. } => {
+                format!("Stack underflow! stack length: {}", stack_length)
+            }
+            HydorError::StackOverflow { stack_length, .. } => {
+                format!("Stack overflow! stack length: {}", stack_length)
+            }
+
+            HydorError::TypeError {
+                operation,
+                expected,
+                got,
+                ..
+            } => {
+                format!(
+                    "Cannot perform {operation}, expected type '{expected}' but got '{got}' instead"
+                )
+            }
         }
     }
 
@@ -70,6 +113,12 @@ impl HydorError {
             )),
             HydorError::UnknownAST { .. } => {
                 Some(format!("Try defining a compiler for the given ast node"))
+            }
+            HydorError::StackUnderflow { .. } => None,
+            HydorError::StackOverflow { .. } => None,
+
+            HydorError::TypeError { expected, got, .. } => {
+                Some(format!("Try converting type '{got}' to type '{expected}'"))
             }
         }
     }

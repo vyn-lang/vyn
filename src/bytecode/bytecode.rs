@@ -6,7 +6,6 @@ use num_enum::IntoPrimitive;
 pub enum OpCode {
     Halt = 0x01,
     Pop = 0x02,
-    LoadConstant = 0x03,
 
     Add = 0x04,
     Subtract = 0x05,
@@ -16,6 +15,9 @@ pub enum OpCode {
 
     UnaryNegate = 0x09,
     UnaryNot = 0xA,
+
+    LoadConstant = 0x03,
+    LoadString = 0xB,
 }
 
 pub struct Definition {
@@ -59,6 +61,10 @@ impl OpCode {
         match opcode {
             OpCode::LoadConstant => Definition {
                 name: "LOAD_CONSTANT",
+                operands_width: vec![2],
+            },
+            OpCode::LoadString => Definition {
+                name: "LOAD_STRING",
                 operands_width: vec![2],
             },
             OpCode::Halt => Definition {
@@ -118,6 +124,7 @@ impl ToOpcode for u8 {
             0x08 => OpCode::Exponent,
             0x09 => OpCode::UnaryNegate,
             0xA => OpCode::UnaryNot,
+            0xB => OpCode::LoadString,
 
             _ => unreachable!("Cannot convert byte '{}' to an opcode", self),
         }
