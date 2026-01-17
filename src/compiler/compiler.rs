@@ -6,6 +6,7 @@ use crate::{
     errors::{ErrorCollector, HydorError},
     runtime_value::RuntimeValue,
     tokens::TokenType,
+    type_checker::type_checker::{Type, TypeChecker},
     utils::Span,
 };
 
@@ -14,7 +15,6 @@ pub struct Compiler {
     constants: Vec<RuntimeValue>,
     string_table: Vec<String>,
     debug_info: DebugInfo,
-
     errors: ErrorCollector,
 }
 
@@ -26,16 +26,10 @@ pub struct Bytecode {
 }
 
 /// Run-length encoded debug information
-/// Stores only when line/column values change to save space
 #[derive(Default)]
 pub struct DebugInfo {
-    /// (bytecode_offset, line_number) - stores line changes only
     pub line_changes: Vec<(usize, u32)>,
-
-    /// (bytecode_offset, start_col) - stores start column changes only
     pub start_col_changes: Vec<(usize, u32)>,
-
-    /// (bytecode_offset, end_col) - stores end column changes only
     pub end_col_changes: Vec<(usize, u32)>,
 }
 
@@ -48,7 +42,6 @@ impl DebugInfo {
         }
     }
 
-    /// Decompress: lookup the span for a given bytecode offset
     pub fn get_span(&self, ip: usize) -> Span {
         let line = self.find_value(&self.line_changes, ip);
         let start_column = self.find_value(&self.start_col_changes, ip);
@@ -61,10 +54,9 @@ impl DebugInfo {
         }
     }
 
-    /// Binary search to find the last value before or at the given offset
     fn find_value(&self, changes: &Vec<(usize, u32)>, ip: usize) -> u32 {
         if changes.is_empty() {
-            return 0; // fallback
+            return 0;
         }
 
         let idx = changes
@@ -82,20 +74,24 @@ impl Compiler {
             constants: Vec::new(),
             string_table: Vec::new(),
             debug_info: DebugInfo::new(),
-
             errors: ErrorCollector::new(),
         }
     }
 
     /// Main entry point
     pub fn compile_program(&mut self, program: Program) -> Result<Bytecode, ErrorCollector> {
+        // Type check the entire program before compiling
+        let mut type_checker = TypeChecker::new();
+        type_checker.check_program(&program)?;
+
         for stmt in program.statements {
-            if self.try_compile_statement(stmt).is_none() {
+            let result = self.try_compile_statement(stmt);
+
+            if result.is_none() {
                 break;
             }
         }
 
-        // Emit with dummy span
         self.emit(
             OpCode::Halt,
             vec![],
@@ -166,12 +162,25 @@ impl Compiler {
             }
 
             Expr::Unary { operator, right } => {
-                self.compile_expression(*right);
+                self.compile_expression(*right.clone())?;
+                let operand_type = self.get_expr_type(&right);
 
                 match operator.get_token_type() {
+                    TokenType::Minus => {
+                        match operand_type {
+                            Type::Integer => self.emit(OpCode::UnaryNegateInt, vec![], span),
+                            Type::Float => self.emit(OpCode::UnaryNegateFloat, vec![], span),
+                            _ => {
+                                self.throw_error(HydorError::TypeMismatch {
+                                    expected: vec![Type::Integer, Type::Float], // Expects either int or float
+                                    found: operand_type,
+                                    span,
+                                });
+                                return None;
+                            }
+                        }
+                    }
                     TokenType::Not => self.emit(OpCode::UnaryNot, vec![], span),
-                    TokenType::Minus => self.emit(OpCode::UnaryNegate, vec![], span),
-
                     _ => unreachable!("Unhandled unary operator type"),
                 };
             }
@@ -181,22 +190,122 @@ impl Compiler {
                 operator,
                 right,
             } => {
-                self.compile_expression(*left);
-                self.compile_expression(*right);
+                self.compile_expression(*left.clone())?;
+                self.compile_expression(*right.clone())?;
+
+                let left_type = self.get_expr_type(&left);
+                let right_type = self.get_expr_type(&right);
 
                 match operator.get_token_type() {
-                    TokenType::Plus => self.emit(OpCode::Add, vec![], span),
-                    TokenType::Minus => self.emit(OpCode::Subtract, vec![], span),
-                    TokenType::Asterisk => self.emit(OpCode::Subtract, vec![], span),
-                    TokenType::Slash => self.emit(OpCode::Divide, vec![], span),
-                    TokenType::Caret => self.emit(OpCode::Exponent, vec![], span),
-                    TokenType::LessThan => self.emit(OpCode::CompareLess, vec![], span),
-                    TokenType::LessThanEqual => self.emit(OpCode::CompareLessEqual, vec![], span),
-                    TokenType::GreaterThan => self.emit(OpCode::CompareGreater, vec![], span),
-                    TokenType::GreaterThanEqual => {
-                        self.emit(OpCode::CompareGreaterEqual, vec![], span)
-                    }
+                    TokenType::Plus => match (left_type, right_type) {
+                        (Type::Integer, Type::Integer) => self.emit(OpCode::AddInt, vec![], span),
+
+                        (Type::Float, Type::Float) => self.emit(OpCode::AddFloat, vec![], span),
+
+                        (Type::String, Type::String) => {
+                            self.emit(OpCode::ConcatString, vec![], span)
+                        }
+                        _ => {
+                            unreachable!("Type mismatch should be caught in type checker")
+                        }
+                    },
+
+                    TokenType::Minus => match (left_type, right_type) {
+                        (Type::Integer, Type::Integer) => {
+                            self.emit(OpCode::SubtractInt, vec![], span)
+                        }
+                        (Type::Float, Type::Float) => {
+                            self.emit(OpCode::SubtractFloat, vec![], span)
+                        }
+                        _ => {
+                            unreachable!("Type mismatch should be caught in type checker")
+                        }
+                    },
+
+                    TokenType::Asterisk => match (left_type, right_type) {
+                        (Type::Integer, Type::Integer) => {
+                            self.emit(OpCode::MultiplyInt, vec![], span)
+                        }
+                        (Type::Float, Type::Float) => {
+                            self.emit(OpCode::MultiplyFloat, vec![], span)
+                        }
+                        _ => {
+                            unreachable!("Type mismatch should be caught in type checker")
+                        }
+                    },
+
+                    TokenType::Slash => match (left_type, right_type) {
+                        (Type::Integer, Type::Integer) => {
+                            self.emit(OpCode::DivideInt, vec![], span)
+                        }
+                        (Type::Float, Type::Float) => self.emit(OpCode::DivideFloat, vec![], span),
+                        _ => {
+                            unreachable!("Type mismatch should be caught in type checker")
+                        }
+                    },
+
+                    TokenType::Caret => match (left_type, right_type) {
+                        (Type::Integer, Type::Integer) => {
+                            self.emit(OpCode::ExponentInt, vec![], span)
+                        }
+                        (Type::Float, Type::Float) => {
+                            self.emit(OpCode::ExponentFloat, vec![], span)
+                        }
+                        _ => {
+                            unreachable!("Type mismatch should be caught in type checker")
+                        }
+                    },
+
+                    TokenType::LessThan => match (left_type, right_type) {
+                        (Type::Integer, Type::Integer) => {
+                            self.emit(OpCode::CompareLessInt, vec![], span)
+                        }
+                        (Type::Float, Type::Float) => {
+                            self.emit(OpCode::CompareLessFloat, vec![], span)
+                        }
+                        _ => {
+                            unreachable!("Type mismatch should be caught in type checker")
+                        }
+                    },
+
+                    TokenType::LessThanEqual => match (left_type, right_type) {
+                        (Type::Integer, Type::Integer) => {
+                            self.emit(OpCode::CompareLessEqualInt, vec![], span)
+                        }
+                        (Type::Float, Type::Float) => {
+                            self.emit(OpCode::CompareLessEqualFloat, vec![], span)
+                        }
+                        _ => {
+                            unreachable!("Type mismatch should be caught in type checker")
+                        }
+                    },
+
+                    TokenType::GreaterThan => match (left_type, right_type) {
+                        (Type::Integer, Type::Integer) => {
+                            self.emit(OpCode::CompareGreaterInt, vec![], span)
+                        }
+                        (Type::Float, Type::Float) => {
+                            self.emit(OpCode::CompareGreaterFloat, vec![], span)
+                        }
+                        _ => {
+                            unreachable!("Type mismatch should be caught in type checker")
+                        }
+                    },
+
+                    TokenType::GreaterThanEqual => match (left_type, right_type) {
+                        (Type::Integer, Type::Integer) => {
+                            self.emit(OpCode::CompareGreaterEqualInt, vec![], span)
+                        }
+                        (Type::Float, Type::Float) => {
+                            self.emit(OpCode::CompareGreaterEqualFloat, vec![], span)
+                        }
+                        _ => {
+                            unreachable!("Type mismatch should be caught in type checker")
+                        }
+                    },
+
                     TokenType::Equal => self.emit(OpCode::CompareEqual, vec![], span),
+
                     TokenType::NotEqual => self.emit(OpCode::CompareNotEqual, vec![], span),
 
                     _ => unreachable!("Unhandled binary operator type"),
@@ -215,12 +324,57 @@ impl Compiler {
         Some(())
     }
 
+    fn get_expr_type(&self, expr: &Expression) -> Type {
+        match &expr.node {
+            Expr::IntegerLiteral(_) => Type::Integer,
+            Expr::FloatLiteral(_) => Type::Float,
+            Expr::BooleanLiteral(_) => Type::Bool,
+            Expr::StringLiteral(_) => Type::String,
+            Expr::NilLiteral => Type::Nil,
+
+            Expr::Unary { right, operator } => {
+                match operator.get_token_type() {
+                    TokenType::Minus => {
+                        // -x is Integer if x is Integer
+                        self.get_expr_type(right)
+                    }
+                    TokenType::Not => {
+                        // !x is always Bool
+                        Type::Bool
+                    }
+                    _ => unreachable!(),
+                }
+            }
+
+            Expr::BinaryOperation { left, operator, .. } => match operator.get_token_type() {
+                TokenType::Plus
+                | TokenType::Minus
+                | TokenType::Asterisk
+                | TokenType::Slash
+                | TokenType::Caret => self.get_expr_type(left),
+
+                TokenType::LessThan
+                | TokenType::LessThanEqual
+                | TokenType::GreaterThan
+                | TokenType::GreaterThanEqual
+                | TokenType::Equal
+                | TokenType::NotEqual => Type::Bool,
+
+                _ => unreachable!(),
+            },
+
+            _ => unreachable!("Unknown expression type"),
+        }
+    }
+
+    /// Add a string to the string table (with deduplication)
     fn intern_string(&mut self, s: String) -> usize {
-        // Optional: deduplicate strings (more efficient)
+        // Check if we already have this string
         if let Some(pos) = self.string_table.iter().position(|existing| existing == &s) {
             return pos;
         }
 
+        // New string, add it
         self.string_table.push(s);
         self.string_table.len() - 1
     }
@@ -238,28 +392,28 @@ impl Compiler {
     fn emit(&mut self, opcode: OpCode, operands: Vec<usize>, span: Span) -> usize {
         let instruction = OpCode::make(opcode, operands);
         let position = self.add_instruction(instruction, span);
-
         position
     }
 
+    /// Add a constant to the constants table
     fn add_constant(&mut self, value: RuntimeValue) -> usize {
         self.constants.push(value);
-        self.constants.len() - 1 // Returns the constant's "address"
+        self.constants.len() - 1
     }
 
+    /// Record a compilation error
     fn throw_error(&mut self, error: HydorError) {
         self.errors.add(error);
     }
 
-    /// Add instruction bytes and track their span n
+    /// Add instruction bytes and track their span
     fn add_instruction(&mut self, instruction: Instructions, span: Span) -> usize {
         let position = self.instructions.len();
 
-        // For each byte in the instruction, add span info (compressed)
         for byte in instruction {
             let offset = self.instructions.len();
 
-            // Only add if values changed from last entry
+            // Compressed span tracking (only record when values change)
             if self.should_add_line_change(span.line) {
                 self.debug_info.line_changes.push((offset, span.line));
             }
@@ -282,13 +436,11 @@ impl Compiler {
         position
     }
 
-    /// Check if we need to record a line change (for compression)
     fn should_add_line_change(&self, line: u32) -> bool {
         self.debug_info.line_changes.is_empty()
             || self.debug_info.line_changes.last().unwrap().1 != line
     }
 
-    /// Check if we need to record a column change (for compression)
     fn should_add_col_change(&self, changes: &Vec<(usize, u32)>, col: u32) -> bool {
         changes.is_empty() || changes.last().unwrap().1 != col
     }

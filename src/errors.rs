@@ -26,7 +26,7 @@ pub enum HydorError {
         span: Span,
     },
     TypeMismatch {
-        expected: Type,
+        expected: Vec<Type>, // Can be one of the expected
         found: Type,
         span: Span,
     },
@@ -136,7 +136,24 @@ impl HydorError {
             HydorError::TypeMismatch {
                 expected, found, ..
             } => {
-                format!("Type mismatch: expected {:?}, found {:?}", expected, found)
+                if expected.len() > 1 {
+                    let expected_types = expected
+                        .iter()
+                        .map(|t| t.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", ");
+
+                    format!(
+                        "Type mismatch: expected either one of these types {:?}, found {:?}",
+                        expected_types, found
+                    )
+                } else {
+                    format!(
+                        "Type mismatch: expected {:?}, found {:?}",
+                        expected.get(0).unwrap(),
+                        found
+                    )
+                }
             }
             HydorError::InvalidUnaryOp {
                 operator,

@@ -1,5 +1,3 @@
-use std::result;
-
 use crate::{
     ast::Expression,
     errors::HydorError,

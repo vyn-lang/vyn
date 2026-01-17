@@ -37,7 +37,7 @@ impl TypeChecker {
         }
     }
 
-    /// Main entry point - call this before compilation
+    /// Main entry point
     pub fn check_program(&mut self, program: &Program) -> Result<(), ErrorCollector> {
         for stmt in &program.statements {
             let result = self.check_statement(stmt);
