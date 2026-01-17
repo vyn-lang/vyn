@@ -15,6 +15,7 @@ impl Parser {
                 got: current_token_type,
                 span: current_token.span,
             });
+            self.advance(); // consume bad tokn
             return None;
         }
 
@@ -34,6 +35,7 @@ impl Parser {
                     got: type_name.clone(),
                     span: current_token.span,
                 });
+                self.advance(); // consume bad token
                 None
             }
         }

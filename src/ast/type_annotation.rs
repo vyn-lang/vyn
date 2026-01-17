@@ -9,10 +9,10 @@ pub enum TypeAnnotation {
 impl TypeAnnotation {
     pub fn from_identifier(name: &str) -> Option<Self> {
         match name {
-            "int" => Some(TypeAnnotation::IntegerType),
-            "float" => Some(TypeAnnotation::FloatType),
-            "bool" => Some(TypeAnnotation::BooleanType),
-            "string" => Some(TypeAnnotation::StringType),
+            "Int" => Some(TypeAnnotation::IntegerType),
+            "Float" => Some(TypeAnnotation::FloatType),
+            "Bool" => Some(TypeAnnotation::BooleanType),
+            "String" => Some(TypeAnnotation::StringType),
             _ => None,
         }
     }

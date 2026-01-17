@@ -71,12 +71,15 @@ impl Parser {
         let mut body: Vec<Statement> = Vec::new();
 
         while !self.is_eof() {
+            self.skip_delimiters(); // Skip leading delimiters
+
+            if self.is_eof() {
+                break;
+            }
+
             match self.try_parse_statement() {
                 Some(stmt) => body.push(stmt),
-                None => {
-                    // Synchronize: skip to next statement boundary
-                    self.synchronize();
-                }
+                None => self.synchronize(),
             }
         }
 
@@ -112,50 +115,52 @@ impl Parser {
         )
     }
 
+    /// Skip all consecutive delimiters (newlines and semicolons)
+    fn skip_delimiters(&mut self) {
+        while self.is_at_delimiter() && !self.is_eof() {
+            self.advance();
+        }
+    }
+
     fn expect(&mut self, token_type: TokenType) -> bool {
         if self.current_token().token.get_token_type() != token_type {
-            let expect_err_msg = HydorError::ExpectedToken {
+            self.errors.add(HydorError::ExpectedToken {
                 expected: token_type,
                 got: self.current_token().token.get_token_type(),
                 span: self.current_token().span,
-            };
-
-            self.errors.add(expect_err_msg);
+            });
             return false;
         }
 
-        self.current += 1;
+        self.advance();
         true
     }
 
     fn expect_delimiter(&mut self) -> bool {
-        // If we're inside delimiters, delimiters are optional
+        // If we're inside delimiters (parentheses, etc.), delimiters are optional
         if !self.delimiter_stack.is_empty() {
-            // Just skip any delimiters if present, but don't require them
-            while self.is_at_delimiter() && !self.is_eof() {
-                self.advance();
-            }
-            return true; // Always succeed when inside delimiters
+            self.skip_delimiters();
+            return true;
         }
 
-        // Outside delimiters - require a delimiter
-        match self.current_token().token.get_token_type() {
+        // Outside delimiters - require a delimiter OR EOF
+        let current = self.current_token().token.get_token_type();
+
+        match current {
             TokenType::EndOfFile => true,
+
             TokenType::Semicolon | TokenType::Newline => {
                 // Consume all consecutive delimiters
-                while self.is_at_delimiter() && !self.is_eof() {
-                    self.advance();
-                }
+                self.skip_delimiters();
                 true
             }
-            _ => {
-                let expect_err_msg = HydorError::ExpectedToken {
-                    expected: TokenType::Semicolon,
-                    got: self.current_token().token.get_token_type(),
-                    span: self.current_token().span,
-                };
 
-                self.errors.add(expect_err_msg);
+            _ => {
+                self.errors.add(HydorError::ExpectedToken {
+                    expected: TokenType::Semicolon,
+                    got: current,
+                    span: self.current_token().span,
+                });
                 false
             }
         }
@@ -163,31 +168,20 @@ impl Parser {
 
     fn skip_newlines_in_delimiters(&mut self) {
         if !self.delimiter_stack.is_empty() {
-            while matches!(
-                self.current_token().token.get_token_type(),
-                TokenType::Newline | TokenType::Semicolon
-            ) && !self.is_eof()
-            {
-                self.advance();
-            }
+            self.skip_delimiters();
         }
     }
 
+    /// Synchronize to the next statement boundary after an error
+    /// Just keep advancing until we're past all delimiters (or hit EOF)
     fn synchronize(&mut self) {
-        self.advance();
-
-        while !self.is_eof() {
-            // Stop at statement boundaries
-            if self.is_at_delimiter() {
-                self.advance(); // consume the delimiter
-                return;
-            }
-
-            // Stop before keywords that start new statements
-            // (when you add them: let, fn, if, while, etc.)
-
+        // Skip until we find a delimiter or EOF
+        while !self.is_eof() && !self.is_at_delimiter() {
             self.advance();
         }
+
+        // Now skip all the delimiters to get to the next statement
+        self.skip_delimiters();
     }
 
     pub(crate) fn current_token(&self) -> &TokenInfo {
@@ -246,17 +240,23 @@ impl Parser {
     fn try_parse_statement(&mut self) -> Option<Statement> {
         let stmt_type = self.current_token().token.get_token_type();
 
-        // Try to parse as a statement
+        // Try to parse as a statement keyword
         if let Some(stmt_fn) = self.stmt_parse_fns.get(&stmt_type) {
             return stmt_fn(self);
         }
 
-        // expression statement
+        // Otherwise, treat as expression statement
         let start = self.current_token().clone();
 
-        let expr = self.try_parse_expression(Precedence::Default.into())?;
+        let expr = match self.try_parse_expression(Precedence::Default.into()) {
+            Some(e) => e,
+            None => return None,
+        };
 
-        self.expect_delimiter();
+        // Expression statements require a delimiter
+        if !self.expect_delimiter() {
+            return None;
+        }
 
         Some(Spanned {
             node: Stmt::Expression { expression: expr },
@@ -339,7 +339,7 @@ impl Parser {
         let token_info = self.current_token();
         let expr = Expr::NilLiteral.spanned(token_info.span);
 
-        self.advance(); // Eat token
+        self.advance();
         Some(expr)
     }
 
@@ -350,30 +350,35 @@ impl Parser {
         let value = self.try_parse_expression(Precedence::Unary.into())?;
         let val_span = value.span;
 
-        let mut expr = Expr::Unary {
+        let expr = Expr::Unary {
             operator: operator_info.token,
             right: Box::new(value),
         }
-        .spanned(operator_info.span);
-
-        let old_span = expr.span;
-
-        expr.span = Span {
-            line: old_span.line,
-            start_column: old_span.start_column,
+        .spanned(Span {
+            line: operator_info.span.line,
+            start_column: operator_info.span.start_column,
             end_column: val_span.end_column,
-        };
+        });
 
         Some(expr)
     }
 
     pub fn parse_grouping_expr(&mut self) -> Option<Expression> {
+        let left_paren_span = self.current_token().span;
         self.advance(); // Eat '('
         self.delimiter_stack.push(TokenType::LeftParenthesis);
 
-        // skip \n after (
+        // Skip newlines after (
         self.skip_newlines_in_delimiters();
-        let mut expr = self.try_parse_expression(Precedence::Default.into())?;
+
+        let expr = match self.try_parse_expression(Precedence::Default.into()) {
+            Some(e) => e,
+            None => {
+                self.delimiter_stack.pop();
+                return None;
+            }
+        };
+
         self.skip_newlines_in_delimiters();
 
         self.delimiter_stack.pop(); // Remove (
@@ -382,14 +387,21 @@ impl Parser {
             return None;
         }
 
-        let old_span = expr.span;
-        expr.span = Span {
-            line: old_span.line,
-            start_column: old_span.start_column - 1, /* -1 for ( */
-            end_column: old_span.end_column + 1,     /* +1 for ) */
-        };
+        let right_paren_span = self
+            .tokens
+            .get(self.current - 1)
+            .map(|t| t.span)
+            .unwrap_or(expr.span);
 
-        Some(expr)
+        // Return the expression with updated span to include parentheses
+        Some(Spanned {
+            node: expr.node,
+            span: Span {
+                line: left_paren_span.line,
+                start_column: left_paren_span.start_column,
+                end_column: right_paren_span.end_column,
+            },
+        })
     }
 
     // ------------------- Left Denoted Expressions -------------------
@@ -405,8 +417,7 @@ impl Parser {
 
         let right = self.try_parse_expression(operator_precedence.into())?;
 
-        // Create span covering entire expression: from left start to right end
-        let full_span = crate::utils::Span {
+        let full_span = Span {
             line: left.span.line,
             start_column: left.span.start_column,
             end_column: right.span.end_column,
@@ -414,10 +425,10 @@ impl Parser {
 
         let expr = Expr::BinaryOperation {
             left: Box::new(left),
-            operator: operator_info.token.clone(),
+            operator: operator_info.token,
             right: Box::new(right),
         }
-        .spanned(full_span); // ← Use full expression span
+        .spanned(full_span);
 
         Some(expr)
     }
@@ -436,8 +447,7 @@ impl Parser {
         // Parse right-associative
         let right = self.try_parse_expression(operator_precedence - 1)?;
 
-        // Create span covering entire expression: from left start to right end
-        let full_span = crate::utils::Span {
+        let full_span = Span {
             line: left.span.line,
             start_column: left.span.start_column,
             end_column: right.span.end_column,
@@ -445,10 +455,10 @@ impl Parser {
 
         let expr = Expr::BinaryOperation {
             left: Box::new(left),
-            operator: operator_info.token.clone(),
+            operator: operator_info.token,
             right: Box::new(right),
         }
-        .spanned(full_span); // ← Use full expression span
+        .spanned(full_span);
 
         Some(expr)
     }
@@ -458,8 +468,19 @@ impl Parser {
 impl Parser {
     pub fn parse_variable_decl(&mut self) -> Option<Statement> {
         let let_tok = self.current_token().clone();
-        self.advance(); // Eat let keyword ---
+        self.advance();
+
+        // No synchronize calls needed anywhere!
+        if self.current_token().token.get_token_type() != TokenType::Identifier {
+            self.errors.add(HydorError::ExpectedToken {
+                expected: TokenType::Identifier,
+                got: self.current_token().token.get_token_type(),
+                span: self.current_token().span,
+            });
+            return None;
+        }
         let ident = self.parse_identifier_literal()?;
+
         if !self.expect(TokenType::Colon) {
             return None;
         }
@@ -473,18 +494,18 @@ impl Parser {
             return None;
         }
 
-        let full_span = Span {
-            line: let_tok.span.line,
-            start_column: let_tok.span.start_column,
-            end_column: value.span.end_column,
-        };
+        let val_span = value.span.clone();
 
         Some(
             Stmt::VariableDeclaration {
                 identifier: ident,
                 value,
                 annotated_type: an_type,
-                span: full_span,
+                span: Span {
+                    line: let_tok.span.line,
+                    start_column: let_tok.span.start_column,
+                    end_column: val_span.end_column,
+                },
             }
             .spanned(let_tok.span),
         )

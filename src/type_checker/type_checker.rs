@@ -7,7 +7,7 @@ use crate::{
     utils::throw_error,
 };
 use core::fmt;
-use std::{mem, vec};
+use std::mem;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
