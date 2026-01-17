@@ -1,4 +1,7 @@
-#[derive(Debug, Clone, Copy)]
+use core::fmt;
+use std::fmt::{Display, Formatter};
+
+#[derive(Clone, Copy, Debug)]
 pub enum RuntimeValue {
     IntegerLiteral(i32),
     FloatLiteral(f64),
@@ -7,13 +10,25 @@ pub enum RuntimeValue {
     NilLiteral,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum RuntimeType {
     Integer,
     Float,
     Boolean,
     String,
     Nil,
+}
+
+impl Display for RuntimeType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            RuntimeType::Integer => write!(f, "Integer"),
+            RuntimeType::Float => write!(f, "Float"),
+            RuntimeType::Boolean => write!(f, "Boolean"),
+            RuntimeType::String => write!(f, "String"),
+            RuntimeType::Nil => write!(f, "Nil"),
+        }
+    }
 }
 
 impl RuntimeType {

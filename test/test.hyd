@@ -1,4 +1,1 @@
-let x: int = -10+false/(100+2^5);
-let x: int = true;
-let x: Int = -10+false/(100+2^5);
-let x: Int = true;
+let x: Float = 10.0 let x: Float = 10.0;

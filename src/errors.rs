@@ -47,10 +47,23 @@ pub enum HydorError {
         right_type: Type,
         span: Span,
     },
+    UndefinedVariable {
+        name: String,
+        span: Span,
+    },
+    VariableRedeclaration {
+        name: String,
+        original_span: Span,
+        redeclaration_span: Span,
+    },
 
     // ----- Compiler -----
     UnknownAST {
         node: Node,
+        span: Span,
+    },
+    UndefinedIdentifier {
+        ident_name: String,
         span: Span,
     },
 
@@ -66,18 +79,18 @@ pub enum HydorError {
 
     // ----- Runtime Arithmetic Errors -----
     ArithmeticError {
-        operation: String,
+        operation: TokenType,
         left_type: RuntimeType,
         right_type: RuntimeType,
         span: Span,
     },
     UnaryOperationError {
-        operation: String,
+        operation: TokenType,
         operand_type: RuntimeType,
         span: Span,
     },
     ComparisonOperationError {
-        operation: String,
+        operation: TokenType,
         blame_type: RuntimeType,
         span: Span,
     },
@@ -95,8 +108,13 @@ impl HydorError {
             HydorError::InvalidUnaryOp { span, .. } => *span,
             HydorError::InvalidBinaryOp { span, .. } => *span,
             HydorError::DeclarationTypeMismatch { span, .. } => *span,
+            HydorError::UndefinedVariable { span, .. } => *span,
+            HydorError::VariableRedeclaration {
+                redeclaration_span, ..
+            } => *redeclaration_span,
 
             HydorError::UnknownAST { span, .. } => *span,
+            HydorError::UndefinedIdentifier { span, .. } => *span,
 
             HydorError::StackUnderflow { span, .. } => *span,
             HydorError::StackOverflow { span, .. } => *span,
@@ -117,8 +135,11 @@ impl HydorError {
             HydorError::InvalidUnaryOp { .. } => "Type",
             HydorError::InvalidBinaryOp { .. } => "Type",
             HydorError::DeclarationTypeMismatch { .. } => "Type",
+            HydorError::UndefinedVariable { .. } => "Type",
+            HydorError::VariableRedeclaration { .. } => "Type",
 
             HydorError::UnknownAST { .. } => "Compiler",
+            HydorError::UndefinedIdentifier { .. } => "Compiler",
 
             HydorError::StackUnderflow { .. } => "Runtime",
             HydorError::StackOverflow { .. } => "Runtime",
@@ -134,17 +155,17 @@ impl HydorError {
                 format!("Unexpected token '{}'", token)
             }
             HydorError::ExpectedToken { expected, got, .. } => {
-                format!("Expected '{}', but found '{}'", expected, got)
+                format!("Expected '{}' but found '{}'", expected, got)
             }
             HydorError::KeywordTypeError { got, .. } => {
-                format!("Cannot use keyword '{}' as a type", got)
+                format!("'{}' is a keyword and cannot be used as a type name", got)
             }
             HydorError::InvalidTypeName { got, .. } => {
-                format!("Cannot use '{}' as a type as it is an invalid type", got)
+                format!("'{}' is not a valid type", got)
             }
             HydorError::DeclarationTypeMismatch { got, expected, .. } => {
                 format!(
-                    "Cannot declare an identifier annotated as type '{}' because its value is type '{}'",
+                    "Type mismatch in variable declaration: expected '{}', got '{}'",
                     expected, got
                 )
             }
@@ -154,20 +175,16 @@ impl HydorError {
                 if expected.len() > 1 {
                     let expected_types = expected
                         .iter()
-                        .map(|t| t.to_string())
+                        .map(|t| format!("'{}'", t))
                         .collect::<Vec<String>>()
-                        .join(", ");
+                        .join(" or ");
 
                     format!(
-                        "Type mismatch: expected either one of these types {:?}, found {:?}",
+                        "Type mismatch: expected {}, got '{}'",
                         expected_types, found
                     )
                 } else {
-                    format!(
-                        "Type mismatch: expected {:?}, found {:?}",
-                        expected.get(0).unwrap(),
-                        found
-                    )
+                    format!("Type mismatch: expected '{}', got '{}'", expected[0], found)
                 }
             }
             HydorError::InvalidUnaryOp {
@@ -176,9 +193,8 @@ impl HydorError {
                 ..
             } => {
                 format!(
-                    "Cannot apply '{}' to {}",
-                    operator.to_string(),
-                    operand_type.to_string()
+                    "Unary operator '{}' cannot be applied to type '{}'",
+                    operator, operand_type
                 )
             }
             HydorError::InvalidBinaryOp {
@@ -189,34 +205,56 @@ impl HydorError {
             } => {
                 if left_type == right_type {
                     format!(
-                        "Cannot use '{}' on {}",
-                        operator.to_string(),
-                        left_type.to_string()
+                        "Math operator '{}' is not supported for type '{}'",
+                        operator, left_type
                     )
                 } else {
                     format!(
-                        "Cannot use '{}' between {} and {}",
-                        operator.to_string(),
-                        left_type.to_string(),
-                        right_type.to_string()
+                        "Math operator '{}' cannot be used between '{}' and '{}'",
+                        operator, left_type, right_type
                     )
                 }
+            }
+            HydorError::UndefinedVariable { name, .. } => {
+                format!("Undefined variable '{}'", name)
+            }
+            HydorError::VariableRedeclaration {
+                name,
+                original_span,
+                ..
+            } => {
+                format!(
+                    "Variable '{}' is already declared at Ln {}:{}",
+                    name, original_span.line, original_span.start_column
+                )
             }
 
             HydorError::UnknownAST { node, .. } => match node {
                 Node::Statement(s) => {
-                    format!("Cannot compile statement\n\n{:#?}", s)
+                    format!("Unimplemented statement:\n\n{:#?}", s)
                 }
                 Node::Expression(e) => {
-                    format!("Cannot compile expression\n\n{:#?}", e)
+                    format!("Unimplemented expression:\n\n{:#?}", e)
                 }
             },
+            HydorError::UndefinedIdentifier { ident_name, .. } => {
+                format!(
+                    "Internal compiler error: undefined identifier '{}' escaped type checking",
+                    ident_name
+                )
+            }
 
             HydorError::StackUnderflow { stack_length, .. } => {
-                format!("Stack underflow (stack size: {})", stack_length)
+                format!(
+                    "Stack underflow: attempted to pop from stack with {} elements",
+                    stack_length
+                )
             }
             HydorError::StackOverflow { stack_length, .. } => {
-                format!("Stack overflow (stack size: {})", stack_length)
+                format!(
+                    "Stack overflow: stack exceeded maximum size (current size: {})",
+                    stack_length
+                )
             }
 
             HydorError::ArithmeticError {
@@ -227,16 +265,13 @@ impl HydorError {
             } => {
                 if left_type == right_type {
                     format!(
-                        "Cannot perform {} on type '{}'",
-                        operation,
-                        left_type.to_string()
+                        "Arithmetic operation '{}' is not supported for type '{}'",
+                        operation, left_type
                     )
                 } else {
                     format!(
-                        "Cannot perform {} between '{}' and '{}'",
-                        operation,
-                        left_type.to_string(),
-                        right_type.to_string()
+                        "Arithmetic operation '{}' cannot be performed between '{}' and '{}'",
+                        operation, left_type, right_type
                     )
                 }
             }
@@ -247,9 +282,8 @@ impl HydorError {
                 ..
             } => {
                 format!(
-                    "Cannot perform {} on '{}'",
-                    operation,
-                    operand_type.to_string()
+                    "Unary operation '{}' is not supported for type '{}'",
+                    operation, operand_type
                 )
             }
 
@@ -259,9 +293,8 @@ impl HydorError {
                 ..
             } => {
                 format!(
-                    "Cannot use unary '{}' on type '{}'",
-                    operation,
-                    blame_type.to_string()
+                    "Comparison operator '{}' cannot be used with type '{}'",
+                    operation, blame_type
                 )
             }
         }
@@ -269,40 +302,35 @@ impl HydorError {
 
     pub fn hint(&self) -> Option<String> {
         match self {
-            HydorError::UnexpectedToken { token, .. } => {
-                Some(format!("Try removing or replacing '{:?}'", token))
+            HydorError::UnexpectedToken { .. } => {
+                Some("Remove this token or check for missing syntax".to_string())
             }
-            HydorError::ExpectedToken { expected, got, .. } => Some(format!(
-                "Replace '{:?}' with '{:?}' or insert '{:?}' before it",
-                got, expected, expected
+            HydorError::ExpectedToken { expected, .. } => {
+                Some(format!("Insert '{}' at this location", expected))
+            }
+            HydorError::KeywordTypeError { .. } => {
+                Some("Keywords are reserved and cannot be used as type names".to_string())
+            }
+            HydorError::InvalidTypeName { .. } => {
+                Some("Available types: Int, Float, Bool, String".to_string())
+            }
+            HydorError::DeclarationTypeMismatch { got, expected, .. } => Some(format!(
+                "Either change the declared type to '{}' or provide a value of type '{}'",
+                got, expected
             )),
-            HydorError::KeywordTypeError { .. } => Some(format!("Replace or rename the type",)),
-            HydorError::InvalidTypeName { .. } => Some(format!(
-                "Consider changing the type to a valid primitive type",
-            )),
-            HydorError::DeclarationTypeMismatch { got, .. } => Some(format!(
-                "Consider changing the annotated type to '{got}', or updating the value to match the declared type."
-            )),
-            HydorError::TypeMismatch {
-                expected, found, ..
-            } => Some(format!(
-                "Try converting {:?} to {:?}, or use a different operation",
-                found, expected
-            )),
-            HydorError::InvalidUnaryOp {
-                operator,
-                operand_type,
-                ..
-            } => match operator {
-                TokenType::Not => Some(format!(
-                    "The 'not' operator only works on Bool, not {:?}",
-                    operand_type
-                )),
-                TokenType::Minus => Some(format!(
-                    "Negation only works on Int and Float, not {:?}",
-                    operand_type
-                )),
-                _ => Some("This operator is not valid for this type".to_string()),
+            HydorError::TypeMismatch { expected, .. } => {
+                if expected.len() > 1 {
+                    Some("Ensure the value matches one of the expected types".to_string())
+                } else {
+                    Some(format!("Convert the value to type '{}'", expected[0]))
+                }
+            }
+            HydorError::InvalidUnaryOp { operator, .. } => match operator {
+                TokenType::Not => Some("Logical negation requires a boolean operand".to_string()),
+                TokenType::Minus => {
+                    Some("Numeric negation requires an integer or float operand".to_string())
+                }
+                _ => Some("This operator is not supported for the given type".to_string()),
             },
             HydorError::InvalidBinaryOp {
                 operator,
@@ -311,90 +339,77 @@ impl HydorError {
                 ..
             } => {
                 if left_type != right_type {
-                    Some(format!(
-                        "Both sides of '{}' must be the same type",
-                        operator
-                    ))
+                    Some("Both operands must have the same type".to_string())
                 } else {
                     match operator {
                         TokenType::Plus
                         | TokenType::Minus
                         | TokenType::Asterisk
                         | TokenType::Slash
-                        | TokenType::Caret => Some(format!(
-                            "Arithmetic operators only work on Int and Float, not {:?}",
-                            left_type
-                        )),
+                        | TokenType::Caret => Some(
+                            "Arithmetic operators require integer or float operands".to_string(),
+                        ),
                         TokenType::LessThan
                         | TokenType::LessThanEqual
                         | TokenType::GreaterThan
-                        | TokenType::GreaterThanEqual => Some(format!(
-                            "Comparison operators only work on Int and Float, not {:?}",
-                            left_type
-                        )),
-                        _ => Some("Try using compatible types for this operation".to_string()),
+                        | TokenType::GreaterThanEqual => Some(
+                            "Comparison operators require integer or float operands".to_string(),
+                        ),
+                        _ => Some("This operator is not supported for the given types".to_string()),
                     }
                 }
             }
+            HydorError::UndefinedVariable { name, .. } => {
+                Some(format!("Declare the variable '{}' before using it", name))
+            }
+            HydorError::VariableRedeclaration { name, .. } => Some(format!(
+                "Remove this declaration or rename the variable to a different name than '{}'",
+                name
+            )),
 
             HydorError::UnknownAST { .. } => {
-                Some("This AST node is not yet implemented in the compiler".to_string())
+                Some("This is a compiler bug. Please report this issue".to_string())
             }
-            HydorError::StackUnderflow { .. } => {
-                Some("This is likely a compiler bug - please report it".to_string())
-            }
-            HydorError::StackOverflow { .. } => Some(
-                "Try simplifying your expression or splitting it into smaller parts".to_string(),
+            HydorError::UndefinedIdentifier { .. } => Some(
+                "This is a compiler bug. The type checker should have caught this error"
+                    .to_string(),
             ),
 
+            HydorError::StackUnderflow { .. } => {
+                Some("This is a virtual machine bug. Please report this issue".to_string())
+            }
+            HydorError::StackOverflow { .. } => {
+                Some("Reduce expression complexity or split into smaller statements".to_string())
+            }
+
             HydorError::ArithmeticError {
-                operation,
                 left_type,
                 right_type,
                 ..
             } => {
-                let valid_types = match operation.as_str() {
-                    "addition" => "numbers or strings",
-                    "subtraction" | "multiplication" | "division" | "exponentiation" => "numbers",
-                    _ => "compatible types",
-                };
-
                 if left_type == right_type {
                     Some(format!(
-                        "'{}' requires {}, but '{}' doesn't support it",
-                        operation,
-                        valid_types,
-                        left_type.to_string()
+                        "Type '{}' does not support arithmetic operations",
+                        left_type
                     ))
                 } else {
-                    Some(format!(
-                        "'{}' requires both sides to be {}",
-                        operation, valid_types
-                    ))
+                    Some(
+                        "Arithmetic operations require both operands to be the same numeric type"
+                            .to_string(),
+                    )
                 }
             }
 
-            HydorError::UnaryOperationError {
-                operation,
-                operand_type,
-                ..
-            } => {
-                let valid_type = match operation.as_str() {
-                    "negation" => "a number (Int or Float)",
-                    "logical not" => "a boolean (Bool)",
-                    _ => "a compatible type",
-                };
-
-                Some(format!(
-                    "'{}' requires {}, not '{}'",
-                    operation,
-                    valid_type,
-                    operand_type.to_string()
-                ))
-            }
+            HydorError::UnaryOperationError { operation, .. } => match operation {
+                TokenType::Minus => {
+                    Some("Negation requires an integer or float operand".to_string())
+                }
+                TokenType::Not => Some("Logical negation requires a boolean operand".to_string()),
+                _ => Some("This operation is not supported for the given type".to_string()),
+            },
 
             HydorError::ComparisonOperationError { .. } => {
-                Some("Comparisons only work on numbers (Int or Float)".to_string())
+                Some("Comparison operators require integer or float operands".to_string())
             }
         }
     }
@@ -416,47 +431,11 @@ impl HydorError {
         // Error caused by section
         eprintln!("{}", "Error caused by:".white().dimmed().bold());
 
-        let lines: Vec<&str> = source.lines().collect();
+        // Main error location
+        self.print_code_snippet(source, span, true);
 
-        if span.line > 0 && span.line <= (lines.len() as u32) {
-            // Show error line with full info
-            let line_content = lines[(span.line - 1) as usize];
-            eprintln!(
-                "    {} {} {}",
-                format!("Ln {}:{}", span.line, span.start_column)
-                    .cyan()
-                    .bold(),
-                "|".white(),
-                line_content.bold().bright_white(),
-            );
-
-            // Calculate pointer position
-            let line_prefix_len = format!("Ln {}:{}", span.line, span.start_column).len();
-            let gutter_padding = " ".repeat(line_prefix_len + 3); // +3 for " | "
-            let code_padding = " ".repeat(span.start_column.saturating_sub(1) as usize);
-
-            let width = span.end_column.saturating_sub(span.start_column).max(1) as usize;
-
-            let pointer = if width == 1 {
-                "^".to_string()
-            } else {
-                "~".repeat(width)
-            };
-
-            eprintln!(
-                "    {}{}{}",
-                gutter_padding,
-                code_padding,
-                pointer.bright_red().bold()
-            );
-        } else {
-            eprintln!(
-                "    {} {} {}",
-                format!("Ln {}:{}", span.line, span.start_column).cyan(),
-                "|".white(),
-                "<source unavailable>".dimmed()
-            );
-        }
+        // Additional context based on error type
+        self.print_additional_context(source);
 
         eprintln!();
 
@@ -466,6 +445,78 @@ impl HydorError {
         }
 
         eprintln!();
+    }
+
+    fn print_code_snippet(&self, source: &str, span: Span, highlight: bool) {
+        let lines: Vec<&str> = source.lines().collect();
+
+        if span.line == 0 || span.line > (lines.len() as u32) {
+            eprintln!(
+                "    {} {} {}",
+                format!("Ln {}:{}", span.line, span.start_column).cyan(),
+                "|".white(),
+                "<source unavailable>".dimmed()
+            );
+            return;
+        }
+
+        let line_content = lines[(span.line - 1) as usize];
+        let line_label = format!("Ln {}:{}", span.line, span.start_column);
+
+        // Print the line
+        if highlight {
+            eprintln!(
+                "    {} {} {}",
+                line_label.cyan().bold(),
+                "|".white(),
+                line_content.bold().bright_white(),
+            );
+        } else {
+            eprintln!(
+                "    {} {} {}",
+                line_label.cyan().bold(),
+                "|".white(),
+                line_content.dimmed(),
+            );
+        }
+
+        // Print the pointer
+        let line_prefix_len = line_label.len();
+        let gutter_padding = " ".repeat(line_prefix_len + 3); // +3 for " | "
+        let code_padding = " ".repeat(span.start_column.saturating_sub(1) as usize);
+        let width = span.end_column.saturating_sub(span.start_column).max(1) as usize;
+        let pointer = if width == 1 {
+            "^".to_string()
+        } else {
+            "~".repeat(width)
+        };
+
+        if highlight {
+            eprintln!(
+                "    {}{}{}",
+                gutter_padding,
+                code_padding,
+                pointer.bright_red().bold()
+            );
+        } else {
+            eprintln!(
+                "    {}{}{}",
+                gutter_padding,
+                code_padding,
+                pointer.cyan().dimmed()
+            );
+        }
+    }
+
+    fn print_additional_context(&self, source: &str) {
+        match self {
+            HydorError::VariableRedeclaration { original_span, .. } => {
+                eprintln!();
+                eprintln!("{}", "Originally declared here:".white().dimmed());
+                self.print_code_snippet(source, *original_span, false);
+            }
+            _ => {}
+        }
     }
 }
 

@@ -4,6 +4,7 @@ use crate::{
         type_annotation::TypeAnnotation,
     },
     errors::{ErrorCollector, HydorError},
+    type_checker::symbol_type_table::SymbolTypeTable,
     utils::throw_error,
 };
 use core::fmt;
@@ -42,12 +43,14 @@ impl Type {
 }
 
 pub struct TypeChecker {
+    symbol_type_table: SymbolTypeTable,
     errors: ErrorCollector,
 }
 
 impl TypeChecker {
     pub fn new() -> Self {
         Self {
+            symbol_type_table: SymbolTypeTable::new(),
             errors: ErrorCollector::new(),
         }
     }
@@ -73,6 +76,7 @@ impl TypeChecker {
                 Ok(())
             }
             Stmt::VariableDeclaration {
+                identifier,
                 value,
                 annotated_type,
                 span,
@@ -80,6 +84,20 @@ impl TypeChecker {
             } => {
                 let an_type = Type::from_anotated_type(annotated_type);
                 let value_type = self.check_expression(value)?;
+
+                let var_name = match &identifier.node {
+                    Expr::Identifier(name) => name.clone(),
+                    _ => unreachable!("Var names are always identifiers"),
+                };
+
+                // Early store so future reference of the identifier
+                // wont return an "undeclared variable" error
+                self.symbol_type_table.declare_identifier(
+                    var_name,
+                    an_type.clone(),
+                    *span,
+                    &mut self.errors,
+                )?;
 
                 if an_type != value_type {
                     self.throw_error(HydorError::DeclarationTypeMismatch {
@@ -107,6 +125,10 @@ impl TypeChecker {
             Expr::BooleanLiteral(_) => Ok(Type::Bool),
             Expr::StringLiteral(_) => Ok(Type::String),
             Expr::NilLiteral => Ok(Type::Nil),
+            Expr::Identifier(name) => {
+                self.symbol_type_table
+                    .resolve_identifier(name, span, &mut self.errors)
+            }
 
             Expr::Unary { operator, right } => self.check_unary(operator, right, span),
 
@@ -116,7 +138,7 @@ impl TypeChecker {
                 right,
             } => self.check_binary_expr(operator, left, right, span),
 
-            _ => unreachable!("Unknown expression type {:#?}", expr.node),
+            _ => unreachable!("Unknown expression type {:?}", expr.node),
         }
     }
 
