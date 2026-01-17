@@ -1,5 +1,5 @@
 use crate::{
-    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint16},
+    bytecode::bytecode::{Instructions, OpCode, ToOpcode},
     compiler::compiler::{Bytecode, DebugInfo},
     errors::HydorError,
     runtime_value::RuntimeValue,
@@ -54,111 +54,43 @@ impl HydorVM {
             let span = self.debug_info.get_span(self.ip);
 
             match opcode {
-                OpCode::LoadConstant => {
-                    self.load_constant(span)?;
-                }
+                OpCode::LoadConstant => self.load_constant(span)?,
+                OpCode::LoadString => self.load_string(span)?,
+                OpCode::LoadNil => self.push(NIL_LITERAL, span)?,
+                OpCode::LoadBoolTrue => self.push(BOOLEAN_TRUE, span)?,
+                OpCode::LoadBoolFalse => self.push(BOOLEAN_FALSE, span)?,
 
-                OpCode::LoadString => {
-                    self.load_string(span)?;
-                }
+                OpCode::AddInt | OpCode::AddFloat => self.binary_op(opcode, span)?,
+                OpCode::SubtractInt | OpCode::SubtractFloat => self.binary_op(opcode, span)?,
+                OpCode::MultiplyInt | OpCode::MultiplyFloat => self.binary_op(opcode, span)?,
+                OpCode::DivideInt | OpCode::DivideFloat => self.binary_op(opcode, span)?,
+                OpCode::ExponentInt | OpCode::ExponentFloat => self.binary_op(opcode, span)?,
 
-                OpCode::LoadNil => {
-                    self.push(NIL_LITERAL, span)?;
-                }
-                OpCode::LoadBoolTrue => {
-                    self.push(BOOLEAN_TRUE, span)?;
-                }
-                OpCode::LoadBoolFalse => {
-                    self.push(BOOLEAN_FALSE, span)?;
-                }
+                OpCode::ConcatString => self.string_concat(span)?,
 
-                OpCode::AddInt => {
-                    self.binary_op_add()?;
+                OpCode::UnaryNegateInt | OpCode::UnaryNegateFloat => {
+                    self.unary_operation(opcode, span)?
                 }
-                OpCode::ConcatString => {
-                    self.binary_op_add()?;
-                }
+                OpCode::UnaryNot => self.unary_operation(opcode, span)?,
 
-                OpCode::SubtractInt => {
-                    self.binary_op_numeric("subtraction", |a, b| a - b)?;
-                }
-                OpCode::MultiplyInt => {
-                    self.binary_op_numeric("multiplication", |a, b| a * b)?;
-                }
-                OpCode::DivideInt => {
-                    self.binary_op_numeric("division", |a, b| a / b)?;
-                }
-                OpCode::UnaryNegateInt => {
-                    self.unary_operation(opcode, span)?;
-                }
-                OpCode::ExponentInt => {
-                    self.binary_op_numeric("exponentiation", |a, b| a.powf(b))?;
-                }
-
-                OpCode::AddFloat => {
-                    self.binary_op_add()?;
-                }
-                OpCode::SubtractFloat => {
-                    self.binary_op_numeric("subtraction", |a, b| a - b)?;
-                }
-                OpCode::MultiplyFloat => {
-                    self.binary_op_numeric("multiplication", |a, b| a * b)?;
-                }
-                OpCode::DivideFloat => {
-                    self.binary_op_numeric("division", |a, b| a / b)?;
-                }
-                OpCode::ExponentFloat => {
-                    self.binary_op_numeric("exponentiation", |a, b| a.powf(b))?;
-                }
-
-                OpCode::UnaryNegateFloat => {
-                    self.unary_operation(opcode, span)?;
-                }
-
-                OpCode::UnaryNot => {
-                    self.unary_operation(opcode, span)?;
-                }
-
-                OpCode::CompareLessInt => {
-                    self.compare_operation(opcode, span)?;
-                }
-                OpCode::CompareLessEqualInt => {
-                    self.compare_operation(opcode, span)?;
-                }
-                OpCode::CompareGreaterInt => {
-                    self.compare_operation(opcode, span)?;
-                }
-                OpCode::CompareGreaterEqualInt => {
-                    self.compare_operation(opcode, span)?;
-                }
-                OpCode::CompareLessFloat => {
-                    self.compare_operation(opcode, span)?;
-                }
-                OpCode::CompareLessEqualFloat => {
-                    self.compare_operation(opcode, span)?;
-                }
-                OpCode::CompareGreaterFloat => {
-                    self.compare_operation(opcode, span)?;
-                }
-                OpCode::CompareGreaterEqualFloat => {
-                    self.compare_operation(opcode, span)?;
-                }
-                OpCode::CompareEqual => {
-                    self.compare_operation(opcode, span)?;
-                }
-                OpCode::CompareNotEqual => {
-                    self.compare_operation(opcode, span)?;
-                }
+                OpCode::CompareLessInt
+                | OpCode::CompareLessFloat
+                | OpCode::CompareLessEqualInt
+                | OpCode::CompareLessEqualFloat
+                | OpCode::CompareGreaterInt
+                | OpCode::CompareGreaterFloat
+                | OpCode::CompareGreaterEqualInt
+                | OpCode::CompareGreaterEqualFloat
+                | OpCode::CompareEqual
+                | OpCode::CompareNotEqual => self.compare_operation(opcode, span)?,
 
                 OpCode::Pop => {
                     self.last_pop = Some(self.pop_value()?);
                 }
-                OpCode::Halt => {
-                    return Ok(());
-                }
+                OpCode::Halt => return Ok(()),
             }
 
-            self.ip += 1; // Advance opcode
+            self.ip += 1;
         }
 
         unreachable!()
@@ -237,7 +169,6 @@ impl HydorVM {
             })
     }
 
-    // For reading only
     pub fn resolve_string(&self, index: usize) -> &str {
         &self.string_table[index]
     }

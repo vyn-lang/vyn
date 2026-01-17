@@ -1,7 +1,9 @@
+use core::fmt;
+
 use byteorder::{BigEndian, ByteOrder};
 use num_enum::IntoPrimitive;
 
-#[derive(IntoPrimitive, Clone, Copy)]
+#[derive(IntoPrimitive, Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum OpCode {
     Halt = 0x01,
@@ -51,6 +53,29 @@ pub enum OpCode {
     // General equality (works on any type)
     CompareEqual = 0x1E,
     CompareNotEqual = 0x1F,
+}
+
+impl fmt::Display for OpCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            OpCode::AddInt | OpCode::AddFloat => "+",
+            OpCode::SubtractInt | OpCode::SubtractFloat => "-",
+            OpCode::MultiplyInt | OpCode::MultiplyFloat => "*",
+            OpCode::DivideInt | OpCode::DivideFloat => "/",
+            OpCode::ExponentInt | OpCode::ExponentFloat => "^",
+            OpCode::UnaryNegateInt | OpCode::UnaryNegateFloat => "-",
+            OpCode::UnaryNot => "not",
+            OpCode::CompareLessInt | OpCode::CompareLessFloat => "<",
+            OpCode::CompareLessEqualInt | OpCode::CompareLessEqualFloat => "<=",
+            OpCode::CompareGreaterInt | OpCode::CompareGreaterFloat => ">",
+            OpCode::CompareGreaterEqualInt | OpCode::CompareGreaterEqualFloat => ">=",
+            OpCode::CompareEqual => "==",
+            OpCode::CompareNotEqual => "!=",
+            OpCode::ConcatString => "+",
+            _ => return write!(f, "{:?}", self),
+        };
+        write!(f, "{}", s)
+    }
 }
 
 pub struct Definition {

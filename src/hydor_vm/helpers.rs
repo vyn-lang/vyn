@@ -1,4 +1,4 @@
-use crate::{bytecode::bytecode::OpCode, hydor_vm::vm::HydorVM, runtime_value::RuntimeValue};
+use crate::{hydor_vm::vm::HydorVM, runtime_value::RuntimeValue};
 
 impl HydorVM {
     pub(crate) fn is_truthy(&self, rv: RuntimeValue) -> bool {
@@ -16,17 +16,4 @@ impl HydorVM {
             _ => true,
         }
     }
-}
-
-pub(crate) fn opcode_to_operator(opcode: OpCode) -> String {
-    match opcode {
-        OpCode::CompareLessInt | OpCode::CompareLessFloat => "<",
-        OpCode::CompareLessEqualInt | OpCode::CompareLessFloat => "<=",
-        OpCode::CompareGreaterInt | OpCode::CompareGreaterFloat => ">",
-        OpCode::CompareGreaterEqualInt | OpCode::CompareGreaterEqualFloat => ">=",
-        OpCode::CompareEqual => "==",
-        OpCode::CompareNotEqual => "!=",
-        _ => "?",
-    }
-    .to_string()
 }
