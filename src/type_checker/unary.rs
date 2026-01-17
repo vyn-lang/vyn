@@ -12,7 +12,7 @@ impl TypeChecker {
         operator: &Token,
         right: &Expression,
         span: Span,
-    ) -> Option<Type> {
+    ) -> Result<Type, ()> {
         let right_type = self.check_expression(right)?;
 
         match operator.get_token_type() {
@@ -23,9 +23,9 @@ impl TypeChecker {
                         operand_type: right_type,
                         span,
                     });
-                    return None;
+                    return Err(());
                 }
-                Some(Type::Bool)
+                Ok(Type::Bool)
             }
 
             TokenType::Minus => {
@@ -35,9 +35,9 @@ impl TypeChecker {
                         operand_type: right_type,
                         span,
                     });
-                    return None;
+                    return Err(());
                 }
-                Some(right_type)
+                Ok(right_type)
             }
 
             _ => unreachable!("Unknown unary operator"),

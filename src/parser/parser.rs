@@ -5,7 +5,7 @@ use crate::{
     errors::{ErrorCollector, HydorError},
     parser::lookups::Precedence,
     tokens::{Token, TokenInfo, TokenType},
-    utils::Spanned,
+    utils::{Span, Spanned},
 };
 
 type PrefixParseFn = fn(&mut Parser) -> Option<Expression>;
@@ -346,11 +346,21 @@ impl Parser {
         self.advance(); // Eat operator
 
         let value = self.try_parse_expression(Precedence::Unary.into())?;
-        let expr = Expr::Unary {
+        let val_span = value.span;
+
+        let mut expr = Expr::Unary {
             operator: operator_info.token,
             right: Box::new(value),
         }
         .spanned(operator_info.span);
+
+        let old_span = expr.span;
+
+        expr.span = Span {
+            line: old_span.line,
+            start_column: old_span.start_column,
+            end_column: val_span.end_column,
+        };
 
         Some(expr)
     }
@@ -361,7 +371,7 @@ impl Parser {
 
         // skip \n after (
         self.skip_newlines_in_delimiters();
-        let expr = self.try_parse_expression(Precedence::Default.into())?;
+        let mut expr = self.try_parse_expression(Precedence::Default.into())?;
         self.skip_newlines_in_delimiters();
 
         self.delimiter_stack.pop(); // Remove (
@@ -369,6 +379,13 @@ impl Parser {
         if !self.expect(TokenType::RightParenthesis) {
             return None;
         }
+
+        let old_span = expr.span;
+        expr.span = Span {
+            line: old_span.line,
+            start_column: old_span.start_column - 1, /* -1 for ( */
+            end_column: old_span.end_column + 1,     /* +1 for ) */
+        };
 
         Some(expr)
     }
@@ -385,12 +402,20 @@ impl Parser {
         self.advance(); // Eat operator
 
         let right = self.try_parse_expression(operator_precedence.into())?;
+
+        // Create span covering entire expression: from left start to right end
+        let full_span = crate::utils::Span {
+            line: left.span.line,
+            start_column: left.span.start_column,
+            end_column: right.span.end_column,
+        };
+
         let expr = Expr::BinaryOperation {
             left: Box::new(left),
             operator: operator_info.token.clone(),
             right: Box::new(right),
         }
-        .spanned(operator_info.span);
+        .spanned(full_span); // ← Use full expression span
 
         Some(expr)
     }
@@ -408,12 +433,20 @@ impl Parser {
 
         // Parse right-associative
         let right = self.try_parse_expression(operator_precedence - 1)?;
+
+        // Create span covering entire expression: from left start to right end
+        let full_span = crate::utils::Span {
+            line: left.span.line,
+            start_column: left.span.start_column,
+            end_column: right.span.end_column,
+        };
+
         let expr = Expr::BinaryOperation {
             left: Box::new(left),
             operator: operator_info.token.clone(),
             right: Box::new(right),
         }
-        .spanned(operator_info.span);
+        .spanned(full_span); // ← Use full expression span
 
         Some(expr)
     }

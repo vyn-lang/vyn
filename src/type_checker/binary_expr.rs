@@ -13,7 +13,8 @@ impl TypeChecker {
         left: &Expression,
         right: &Expression,
         span: Span,
-    ) -> Option<Type> {
+    ) -> Result<Type, ()> {
+        // If either side has an error, propagate it (stops cascading errors!)
         let left_type = self.check_expression(left)?;
         let right_type = self.check_expression(right)?;
 
@@ -27,17 +28,15 @@ impl TypeChecker {
                         right_type,
                         span,
                     });
-                    return None;
+                    return Err(());
                 }
 
-                // Both must be numeric
-                if left_type == Type::Integer || left_type == Type::Float {
-                    return Some(left_type);
-                }
-
-                // String concat
-                if left_type == Type::String {
-                    return Some(left_type);
+                // Both must be numeric or string
+                if left_type == Type::Integer
+                    || left_type == Type::Float
+                    || left_type == Type::String
+                {
+                    return Ok(left_type);
                 }
 
                 self.throw_error(HydorError::InvalidBinaryOp {
@@ -46,60 +45,29 @@ impl TypeChecker {
                     right_type,
                     span,
                 });
-                return None;
+                Err(())
             }
 
-            TokenType::Minus | TokenType::Asterisk | TokenType::Slash | TokenType::Caret => {
-                if left_type != right_type {
-                    self.throw_error(HydorError::InvalidBinaryOp {
-                        operator: operator.get_token_type().to_string(),
-                        left_type,
-                        right_type,
-                        span,
-                    });
-                    return None;
-                }
+            TokenType::Minus | TokenType::Asterisk | TokenType::Slash | TokenType::Caret => self
+                .require_numeric_types(
+                    &operator.get_token_type().to_string(),
+                    left_type,
+                    right_type,
+                    span,
+                ),
 
-                // Both must be numeric
-                if left_type != Type::Integer && left_type != Type::Float {
-                    self.throw_error(HydorError::InvalidBinaryOp {
-                        operator: operator.get_token_type().to_string(),
-                        left_type: left_type.clone(),
-                        right_type,
-                        span,
-                    });
-                    return None;
-                }
-
-                Some(left_type) // Result is same type as operands
-            }
-
-            // Comparison
+            // Comparison - returns Bool, not the operand type!
             TokenType::LessThan
             | TokenType::LessThanEqual
             | TokenType::GreaterThan
             | TokenType::GreaterThanEqual => {
-                if left_type != right_type {
-                    self.throw_error(HydorError::InvalidBinaryOp {
-                        operator: operator.get_token_type().to_string(),
-                        left_type,
-                        right_type,
-                        span,
-                    });
-                    return None;
-                }
-
-                if left_type != Type::Integer && left_type != Type::Float {
-                    self.throw_error(HydorError::InvalidBinaryOp {
-                        operator: operator.get_token_type().to_string(),
-                        left_type: left_type.clone(),
-                        right_type,
-                        span,
-                    });
-                    return None;
-                }
-
-                Some(Type::Bool)
+                self.require_numeric_types(
+                    &operator.get_token_type().to_string(),
+                    left_type,
+                    right_type,
+                    span,
+                )?;
+                Ok(Type::Bool)
             }
 
             // Equality
@@ -111,13 +79,43 @@ impl TypeChecker {
                         right_type,
                         span,
                     });
-                    return None;
+                    return Err(());
                 }
 
-                Some(Type::Bool)
+                Ok(Type::Bool)
             }
 
             _ => unreachable!("Unknown binary operator"),
         }
+    }
+
+    fn require_numeric_types(
+        &mut self,
+        op: &str,
+        left: Type,
+        right: Type,
+        span: Span,
+    ) -> Result<Type, ()> {
+        if left != right {
+            self.throw_error(HydorError::InvalidBinaryOp {
+                operator: op.to_string(),
+                left_type: left,
+                right_type: right,
+                span,
+            });
+            return Err(());
+        }
+
+        if left != Type::Integer && left != Type::Float {
+            self.throw_error(HydorError::InvalidBinaryOp {
+                operator: op.to_string(),
+                left_type: left.clone(),
+                right_type: right,
+                span,
+            });
+            return Err(());
+        }
+
+        Ok(left)
     }
 }

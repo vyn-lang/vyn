@@ -40,11 +40,8 @@ impl TypeChecker {
     /// Main entry point
     pub fn check_program(&mut self, program: &Program) -> Result<(), ErrorCollector> {
         for stmt in &program.statements {
-            let result = self.check_statement(stmt);
-
-            if result.is_none() {
-                break;
-            }
+            // Ignore individual errors, keep checking all statements
+            let _ = self.check_statement(stmt);
         }
 
         if self.errors.has_errors() {
@@ -54,43 +51,35 @@ impl TypeChecker {
         }
     }
 
-    pub(crate) fn check_statement(&mut self, stmt: &Statement) -> Option<()> {
+    pub(crate) fn check_statement(&mut self, stmt: &Statement) -> Result<(), ()> {
         match &stmt.node {
             Stmt::Expression { expression } => {
-                // Type check the expression, ignore result
                 self.check_expression(expression)?;
+                Ok(())
             }
-
             _ => unimplemented!(),
         }
-
-        Some(())
     }
 
-    pub(crate) fn check_expression(&mut self, expr: &Expression) -> Option<Type> {
+    pub(crate) fn check_expression(&mut self, expr: &Expression) -> Result<Type, ()> {
         let span = expr.span;
 
         match &expr.node {
-            Expr::IntegerLiteral(_) => Some(Type::Integer),
-            Expr::FloatLiteral(_) => Some(Type::Float),
-            Expr::BooleanLiteral(_) => Some(Type::Bool),
-            Expr::StringLiteral(_) => Some(Type::String),
-            Expr::NilLiteral => Some(Type::Nil),
+            Expr::IntegerLiteral(_) => Ok(Type::Integer),
+            Expr::FloatLiteral(_) => Ok(Type::Float),
+            Expr::BooleanLiteral(_) => Ok(Type::Bool),
+            Expr::StringLiteral(_) => Ok(Type::String),
+            Expr::NilLiteral => Ok(Type::Nil),
 
-            Expr::Unary { operator, right } => {
-                let unary_type = self.check_unary(operator, right, span)?;
-                Some(unary_type)
-            }
+            Expr::Unary { operator, right } => self.check_unary(operator, right, span),
 
             Expr::BinaryOperation {
                 left,
                 operator,
                 right,
-            } => {
-                let binary_expr_type = self.check_binary_expr(operator, left, right, span)?;
-                Some(binary_expr_type)
-            }
-            _ => unreachable!("Unknown unary operator"),
+            } => self.check_binary_expr(operator, left, right, span),
+
+            _ => unreachable!("Unknown expression type"),
         }
     }
 

@@ -80,7 +80,12 @@ impl HydorVM {
     }
 
     /// Compute numeric operation and preserve int/float types when possible
-    pub(crate) fn compute_numeric<F>(&self, left: RuntimeValue, right: RuntimeValue, f: F) -> RuntimeValue
+    pub(crate) fn compute_numeric<F>(
+        &self,
+        left: RuntimeValue,
+        right: RuntimeValue,
+        f: F,
+    ) -> RuntimeValue
     where
         F: Fn(f64, f64) -> f64,
     {

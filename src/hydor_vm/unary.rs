@@ -9,49 +9,39 @@ use crate::{
 impl HydorVM {
     pub(crate) fn unary_operation(&mut self, opcode: OpCode, span: Span) -> Result<(), HydorError> {
         match opcode {
-            OpCode::UnaryNegate => self.unary_negation_operation(span),
+            OpCode::UnaryNegateInt | OpCode::UnaryNegateFloat => {
+                self.unary_negation_operation(span, opcode)
+            }
             OpCode::UnaryNot => self.unary_not_operation(),
 
             _ => unreachable!(),
         }
     }
 
-    pub(crate) fn unary_negation_operation(&mut self, span: Span) -> Result<(), HydorError> {
+    pub(crate) fn unary_negation_operation(
+        &mut self,
+        span: Span,
+        opcode: OpCode,
+    ) -> Result<(), HydorError> {
         // This does a direct stack modification
         // which is faster than popping and pushing
         // a value into the stack
         let target = self.peek_offset(0)?;
         let target_span = self.peek_span(0)?;
 
-        if !target.is_number() {
-            // Merge the operator span with the operand span
-            let full_span = Span {
-                line: span.line,
-                start_column: span.start_column,
-                end_column: target_span.end_column,
-            };
+        match opcode {
+            OpCode::UnaryNegateInt => {
+                let int = target.as_int().unwrap();
+                self.set_offset_value(0, RuntimeValue::IntegerLiteral(-int))?;
+            }
+            OpCode::UnaryNegateFloat => {
+                let float = target.as_float().unwrap();
+                self.set_offset_value(0, RuntimeValue::FloatLiteral(-float))?;
+            }
 
-            return Err(HydorError::UnaryOperationError {
-                operation: "negation".to_string(),
-                operand_type: target.get_type(),
-                span: full_span,
-            });
-        }
-
-        if !target.is_number() {
-            return Err(HydorError::UnaryOperationError {
-                operation: "negation".to_string(),
-                operand_type: target.get_type(),
-                span: span,
-            });
-        }
-
-        if target.is_float() {
-            let lit = target.as_float().unwrap();
-            self.set_offset_value(0, RuntimeValue::FloatLiteral(-lit))?; // Negate it!
-        } else {
-            let lit = target.as_int().unwrap();
-            self.set_offset_value(0, RuntimeValue::IntegerLiteral(-lit))?; // Negate it!
+            _ => {
+                unreachable!("Missing opcode for unary negation should be catched by type checker")
+            }
         }
 
         Ok(())

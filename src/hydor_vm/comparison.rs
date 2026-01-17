@@ -61,10 +61,12 @@ impl HydorVM {
         let right_num = right.as_number().unwrap();
 
         let result = match opcode {
-            OpCode::CompareLess => left_num < right_num,
-            OpCode::CompareLessEqual => left_num <= right_num,
-            OpCode::CompareGreater => left_num > right_num,
-            OpCode::CompareGreaterEqual => left_num >= right_num,
+            OpCode::CompareLessInt | OpCode::CompareLessFloat => left_num < right_num,
+            OpCode::CompareLessEqualInt | OpCode::CompareLessEqualFloat => left_num <= right_num,
+            OpCode::CompareGreaterInt | OpCode::CompareGreaterFloat => left_num > right_num,
+            OpCode::CompareGreaterEqualInt | OpCode::CompareGreaterEqualFloat => {
+                left_num >= right_num
+            }
             OpCode::CompareEqual => left_num == right_num,
             OpCode::CompareNotEqual => left_num != right_num,
             _ => unreachable!(),

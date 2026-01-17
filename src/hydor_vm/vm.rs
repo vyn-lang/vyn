@@ -72,23 +72,46 @@ impl HydorVM {
                     self.push(BOOLEAN_FALSE, span)?;
                 }
 
-                OpCode::Add => {
+                OpCode::AddInt => {
                     self.binary_op_add()?;
                 }
-                OpCode::Subtract => {
+                OpCode::ConcatString => {
+                    self.binary_op_add()?;
+                }
+
+                OpCode::SubtractInt => {
                     self.binary_op_numeric("subtraction", |a, b| a - b)?;
                 }
-                OpCode::Multiply => {
+                OpCode::MultiplyInt => {
                     self.binary_op_numeric("multiplication", |a, b| a * b)?;
                 }
-                OpCode::Divide => {
+                OpCode::DivideInt => {
                     self.binary_op_numeric("division", |a, b| a / b)?;
                 }
-                OpCode::Exponent => {
+                OpCode::UnaryNegateInt => {
+                    self.unary_operation(opcode, span)?;
+                }
+                OpCode::ExponentInt => {
                     self.binary_op_numeric("exponentiation", |a, b| a.powf(b))?;
                 }
 
-                OpCode::UnaryNegate => {
+                OpCode::AddFloat => {
+                    self.binary_op_add()?;
+                }
+                OpCode::SubtractFloat => {
+                    self.binary_op_numeric("subtraction", |a, b| a - b)?;
+                }
+                OpCode::MultiplyFloat => {
+                    self.binary_op_numeric("multiplication", |a, b| a * b)?;
+                }
+                OpCode::DivideFloat => {
+                    self.binary_op_numeric("division", |a, b| a / b)?;
+                }
+                OpCode::ExponentFloat => {
+                    self.binary_op_numeric("exponentiation", |a, b| a.powf(b))?;
+                }
+
+                OpCode::UnaryNegateFloat => {
                     self.unary_operation(opcode, span)?;
                 }
 
@@ -96,16 +119,28 @@ impl HydorVM {
                     self.unary_operation(opcode, span)?;
                 }
 
-                OpCode::CompareLess => {
+                OpCode::CompareLessInt => {
                     self.compare_operation(opcode, span)?;
                 }
-                OpCode::CompareLessEqual => {
+                OpCode::CompareLessEqualInt => {
                     self.compare_operation(opcode, span)?;
                 }
-                OpCode::CompareGreater => {
+                OpCode::CompareGreaterInt => {
                     self.compare_operation(opcode, span)?;
                 }
-                OpCode::CompareGreaterEqual => {
+                OpCode::CompareGreaterEqualInt => {
+                    self.compare_operation(opcode, span)?;
+                }
+                OpCode::CompareLessFloat => {
+                    self.compare_operation(opcode, span)?;
+                }
+                OpCode::CompareLessEqualFloat => {
+                    self.compare_operation(opcode, span)?;
+                }
+                OpCode::CompareGreaterFloat => {
+                    self.compare_operation(opcode, span)?;
+                }
+                OpCode::CompareGreaterEqualFloat => {
                     self.compare_operation(opcode, span)?;
                 }
                 OpCode::CompareEqual => {

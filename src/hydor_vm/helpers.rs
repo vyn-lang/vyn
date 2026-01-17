@@ -20,10 +20,10 @@ impl HydorVM {
 
 pub(crate) fn opcode_to_operator(opcode: OpCode) -> String {
     match opcode {
-        OpCode::CompareLess => "<",
-        OpCode::CompareLessEqual => "<=",
-        OpCode::CompareGreater => ">",
-        OpCode::CompareGreaterEqual => ">=",
+        OpCode::CompareLessInt | OpCode::CompareLessFloat => "<",
+        OpCode::CompareLessEqualInt | OpCode::CompareLessFloat => "<=",
+        OpCode::CompareGreaterInt | OpCode::CompareGreaterFloat => ">",
+        OpCode::CompareGreaterEqualInt | OpCode::CompareGreaterEqualFloat => ">=",
         OpCode::CompareEqual => "==",
         OpCode::CompareNotEqual => "!=",
         _ => "?",
