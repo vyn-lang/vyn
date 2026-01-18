@@ -109,13 +109,14 @@ impl Compiler {
         }
     }
 
-    fn try_compile_statement(&mut self, stmt: Statement) -> Option<()> {
+    pub(crate) fn try_compile_statement(&mut self, stmt: Statement) -> Option<()> {
         let span = stmt.span;
 
         match stmt.node {
             Stmt::Expression { expression } => {
                 self.compile_expression(expression)?;
                 self.emit(OpCode::Pop, vec![], span);
+                Some(())
             }
 
             unknown => {
@@ -126,11 +127,9 @@ impl Compiler {
                 return None;
             }
         }
-
-        Some(())
     }
 
-    fn compile_expression(&mut self, expr: Expression) -> Option<()> {
+    pub(crate) fn compile_expression(&mut self, expr: Expression) -> Option<()> {
         let span = expr.span;
 
         match expr.node {
@@ -161,25 +160,35 @@ impl Compiler {
                 self.emit(OpCode::LoadNil, vec![], span);
             }
 
-            Expr::Unary { operator, right } => {
-                self.compile_expression(*right.clone())?;
-                let operand_type = self.get_expr_type(&right);
+            Expr::Unary {
+                ref operator,
+                ref right,
+            } => {
+                // Try to fold unary expression first
+                if let Some(folded) = self.eval_to_constant(&expr) {
+                    self.emit_constant(folded, span);
+                    return Some(());
+                }
+
+                // Can't fold, compile normally
+                let right_expr = (**right).clone();
+                let operand_type = self.get_expr_type(right);
+
+                self.compile_expression(right_expr)?;
 
                 match operator.get_token_type() {
-                    TokenType::Minus => {
-                        match operand_type {
-                            Type::Integer => self.emit(OpCode::UnaryNegateInt, vec![], span),
-                            Type::Float => self.emit(OpCode::UnaryNegateFloat, vec![], span),
-                            _ => {
-                                self.throw_error(HydorError::TypeMismatch {
-                                    expected: vec![Type::Integer, Type::Float], // Expects either int or float
-                                    found: operand_type,
-                                    span,
-                                });
-                                return None;
-                            }
+                    TokenType::Minus => match operand_type {
+                        Type::Integer => self.emit(OpCode::UnaryNegateInt, vec![], span),
+                        Type::Float => self.emit(OpCode::UnaryNegateFloat, vec![], span),
+                        _ => {
+                            self.throw_error(HydorError::TypeMismatch {
+                                expected: vec![Type::Integer, Type::Float],
+                                found: operand_type,
+                                span,
+                            });
+                            return None;
                         }
-                    }
+                    },
                     TokenType::Not => self.emit(OpCode::UnaryNot, vec![], span),
                     _ => unreachable!("Unhandled unary operator type"),
                 };
@@ -190,126 +199,19 @@ impl Compiler {
                 operator,
                 right,
             } => {
-                self.compile_expression(*left.clone())?;
-                self.compile_expression(*right.clone())?;
+                if self
+                    .try_fold_binary(&left, &right, &operator, expr.span)
+                    .is_some()
+                {
+                    return Some(());
+                }
 
                 let left_type = self.get_expr_type(&left);
                 let right_type = self.get_expr_type(&right);
 
-                match operator.get_token_type() {
-                    TokenType::Plus => match (left_type, right_type) {
-                        (Type::Integer, Type::Integer) => self.emit(OpCode::AddInt, vec![], span),
-
-                        (Type::Float, Type::Float) => self.emit(OpCode::AddFloat, vec![], span),
-
-                        (Type::String, Type::String) => {
-                            self.emit(OpCode::ConcatString, vec![], span)
-                        }
-                        _ => {
-                            unreachable!("Type mismatch should be caught in type checker")
-                        }
-                    },
-
-                    TokenType::Minus => match (left_type, right_type) {
-                        (Type::Integer, Type::Integer) => {
-                            self.emit(OpCode::SubtractInt, vec![], span)
-                        }
-                        (Type::Float, Type::Float) => {
-                            self.emit(OpCode::SubtractFloat, vec![], span)
-                        }
-                        _ => {
-                            unreachable!("Type mismatch should be caught in type checker")
-                        }
-                    },
-
-                    TokenType::Asterisk => match (left_type, right_type) {
-                        (Type::Integer, Type::Integer) => {
-                            self.emit(OpCode::MultiplyInt, vec![], span)
-                        }
-                        (Type::Float, Type::Float) => {
-                            self.emit(OpCode::MultiplyFloat, vec![], span)
-                        }
-                        _ => {
-                            unreachable!("Type mismatch should be caught in type checker")
-                        }
-                    },
-
-                    TokenType::Slash => match (left_type, right_type) {
-                        (Type::Integer, Type::Integer) => {
-                            self.emit(OpCode::DivideInt, vec![], span)
-                        }
-                        (Type::Float, Type::Float) => self.emit(OpCode::DivideFloat, vec![], span),
-                        _ => {
-                            unreachable!("Type mismatch should be caught in type checker")
-                        }
-                    },
-
-                    TokenType::Caret => match (left_type, right_type) {
-                        (Type::Integer, Type::Integer) => {
-                            self.emit(OpCode::ExponentInt, vec![], span)
-                        }
-                        (Type::Float, Type::Float) => {
-                            self.emit(OpCode::ExponentFloat, vec![], span)
-                        }
-                        _ => {
-                            unreachable!("Type mismatch should be caught in type checker")
-                        }
-                    },
-
-                    TokenType::LessThan => match (left_type, right_type) {
-                        (Type::Integer, Type::Integer) => {
-                            self.emit(OpCode::CompareLessInt, vec![], span)
-                        }
-                        (Type::Float, Type::Float) => {
-                            self.emit(OpCode::CompareLessFloat, vec![], span)
-                        }
-                        _ => {
-                            unreachable!("Type mismatch should be caught in type checker")
-                        }
-                    },
-
-                    TokenType::LessThanEqual => match (left_type, right_type) {
-                        (Type::Integer, Type::Integer) => {
-                            self.emit(OpCode::CompareLessEqualInt, vec![], span)
-                        }
-                        (Type::Float, Type::Float) => {
-                            self.emit(OpCode::CompareLessEqualFloat, vec![], span)
-                        }
-                        _ => {
-                            unreachable!("Type mismatch should be caught in type checker")
-                        }
-                    },
-
-                    TokenType::GreaterThan => match (left_type, right_type) {
-                        (Type::Integer, Type::Integer) => {
-                            self.emit(OpCode::CompareGreaterInt, vec![], span)
-                        }
-                        (Type::Float, Type::Float) => {
-                            self.emit(OpCode::CompareGreaterFloat, vec![], span)
-                        }
-                        _ => {
-                            unreachable!("Type mismatch should be caught in type checker")
-                        }
-                    },
-
-                    TokenType::GreaterThanEqual => match (left_type, right_type) {
-                        (Type::Integer, Type::Integer) => {
-                            self.emit(OpCode::CompareGreaterEqualInt, vec![], span)
-                        }
-                        (Type::Float, Type::Float) => {
-                            self.emit(OpCode::CompareGreaterEqualFloat, vec![], span)
-                        }
-                        _ => {
-                            unreachable!("Type mismatch should be caught in type checker")
-                        }
-                    },
-
-                    TokenType::Equal => self.emit(OpCode::CompareEqual, vec![], span),
-
-                    TokenType::NotEqual => self.emit(OpCode::CompareNotEqual, vec![], span),
-
-                    _ => unreachable!("Unhandled binary operator type"),
-                };
+                self.compile_binary_expr(
+                    left_type, *left, right_type, *right, operator, expr.span,
+                )?;
             }
 
             unknown => {
@@ -324,7 +226,7 @@ impl Compiler {
         Some(())
     }
 
-    fn get_expr_type(&self, expr: &Expression) -> Type {
+    pub(crate) fn get_expr_type(&self, expr: &Expression) -> Type {
         match &expr.node {
             Expr::IntegerLiteral(_) => Type::Integer,
             Expr::FloatLiteral(_) => Type::Float,
@@ -368,7 +270,7 @@ impl Compiler {
     }
 
     /// Add a string to the string table (with deduplication)
-    fn intern_string(&mut self, s: String) -> usize {
+    pub(crate) fn intern_string(&mut self, s: String) -> usize {
         // Check if we already have this string
         if let Some(pos) = self.string_table.iter().position(|existing| existing == &s) {
             return pos;
@@ -379,7 +281,11 @@ impl Compiler {
         self.string_table.len() - 1
     }
 
-    fn bytecode(&mut self) -> Bytecode {
+    pub(crate) fn get_intern_string(&mut self, idx: usize) -> String {
+        self.string_table[idx].clone()
+    }
+
+    pub fn bytecode(&mut self) -> Bytecode {
         Bytecode {
             instructions: mem::take(&mut self.instructions),
             constants: mem::take(&mut self.constants),
@@ -388,26 +294,41 @@ impl Compiler {
         }
     }
 
+    pub(crate) fn extract_constant_value(&mut self, expr: &Expression) -> Option<RuntimeValue> {
+        match &expr.node {
+            Expr::IntegerLiteral(value) => Some(RuntimeValue::IntegerLiteral(*value)),
+            Expr::FloatLiteral(value) => Some(RuntimeValue::FloatLiteral(*value)),
+            Expr::StringLiteral(value) => {
+                let intern_idx = self.intern_string(value.to_string());
+                Some(RuntimeValue::StringLiteral(intern_idx))
+            }
+            Expr::BooleanLiteral(value) => Some(RuntimeValue::BooleanLiteral(*value)),
+            Expr::NilLiteral => Some(RuntimeValue::NilLiteral),
+            // Return None for non-constant expressions (identifiers, binary ops, etc.)
+            _ => None,
+        }
+    }
+
     /// Emit an instruction with span tracking
-    fn emit(&mut self, opcode: OpCode, operands: Vec<usize>, span: Span) -> usize {
+    pub(crate) fn emit(&mut self, opcode: OpCode, operands: Vec<usize>, span: Span) -> usize {
         let instruction = OpCode::make(opcode, operands);
         let position = self.add_instruction(instruction, span);
         position
     }
 
     /// Add a constant to the constants table
-    fn add_constant(&mut self, value: RuntimeValue) -> usize {
+    pub(crate) fn add_constant(&mut self, value: RuntimeValue) -> usize {
         self.constants.push(value);
         self.constants.len() - 1
     }
 
     /// Record a compilation error
-    fn throw_error(&mut self, error: HydorError) {
+    pub(crate) fn throw_error(&mut self, error: HydorError) {
         self.errors.add(error);
     }
 
     /// Add instruction bytes and track their span
-    fn add_instruction(&mut self, instruction: Instructions, span: Span) -> usize {
+    pub(crate) fn add_instruction(&mut self, instruction: Instructions, span: Span) -> usize {
         let position = self.instructions.len();
 
         for byte in instruction {
