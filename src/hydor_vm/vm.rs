@@ -1,5 +1,5 @@
 use crate::{
-    bytecode::bytecode::{Instructions, OpCode, ToOpcode},
+    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint16},
     compiler::compiler::{Bytecode, DebugInfo},
     errors::HydorError,
     runtime_value::RuntimeValue,
@@ -7,9 +7,11 @@ use crate::{
 };
 
 const MAX_STACK: usize = 10_000;
+const GLOBAL_STACK: usize = 4028;
 
 pub struct HydorVM {
     stack: Vec<StackValue>,
+    globals: Vec<StackValue>,
     last_pop: Option<RuntimeValue>,
 
     pub instructions: Instructions,
@@ -36,6 +38,7 @@ impl HydorVM {
     pub fn new(bytecode: Bytecode) -> Self {
         Self {
             stack: Vec::with_capacity(MAX_STACK),
+            globals: Vec::new(), // Start empty
             last_pop: None,
 
             string_table: bytecode.string_table,
@@ -84,10 +87,27 @@ impl HydorVM {
                 | OpCode::CompareEqual
                 | OpCode::CompareNotEqual => self.compare_operation(opcode, span)?,
 
+                OpCode::LoadGlobal => {
+                    let global_index = read_uint16(&self.instructions, self.ip + 1);
+                    self.ip += 2;
+
+                    let global = self.get_global(global_index as usize);
+                    self.push(global.value, span)?;
+                }
+
+                OpCode::DeclareGlobal => {
+                    let global_idx = read_uint16(&self.instructions, self.ip + 1);
+                    self.ip += 2;
+
+                    let (value, span) = self.pop_with_span()?;
+                    self.add_global(global_idx as usize, StackValue { value, span })?;
+                }
+
                 OpCode::Pop => {
                     self.last_pop = Some(self.pop_value()?);
                 }
                 OpCode::Halt => return Ok(()),
+                _ => unreachable!(),
             }
 
             self.ip += 1;
@@ -96,9 +116,10 @@ impl HydorVM {
         unreachable!()
     }
 
+    #[inline(always)]
     pub(crate) fn push(&mut self, value: RuntimeValue, span: Span) -> Result<(), HydorError> {
         if self.stack.len() >= MAX_STACK {
-            return Err(HydorError::StackOverflow {
+            return Err(HydorError::OperandStackOverflow {
                 stack_length: self.stack.len(),
                 span,
             });
@@ -108,11 +129,41 @@ impl HydorVM {
         Ok(())
     }
 
+    #[inline(always)]
+    pub(crate) fn add_global(&mut self, idx: usize, value: StackValue) -> Result<(), HydorError> {
+        if idx >= GLOBAL_STACK {
+            return Err(HydorError::GlobalStackOverflow {
+                stack_length: self.globals.len(),
+                max: GLOBAL_STACK,
+                span: value.span,
+            });
+        }
+
+        // Grow lazily only when needed
+        if idx >= self.globals.len() {
+            self.globals.resize(
+                idx + 1,
+                StackValue {
+                    value: NIL_LITERAL,
+                    span: Span::default(),
+                },
+            );
+        }
+
+        self.globals[idx] = value;
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub(crate) fn get_global(&self, idx: usize) -> StackValue {
+        self.globals[idx]
+    }
+
     pub(crate) fn peek_offset(&self, n: usize) -> Result<RuntimeValue, HydorError> {
         let size = self.stack.len();
         if n >= size {
-            return Err(HydorError::StackUnderflow {
-                stack_length: size,
+            return Err(HydorError::OperandStackUnderflow {
+                stack_length: MAX_STACK,
                 span: Span::default(),
             });
         }
@@ -123,7 +174,7 @@ impl HydorVM {
     pub(crate) fn peek_span(&self, n: usize) -> Result<Span, HydorError> {
         let size = self.stack.len();
         if n >= size {
-            return Err(HydorError::StackUnderflow {
+            return Err(HydorError::OperandStackUnderflow {
                 stack_length: size,
                 span: Span::default(),
             });
@@ -139,7 +190,7 @@ impl HydorVM {
     ) -> Result<(), HydorError> {
         let size = self.stack.len();
         if n >= size {
-            return Err(HydorError::StackUnderflow {
+            return Err(HydorError::OperandStackUnderflow {
                 stack_length: size,
                 span: Span::default(),
             });
@@ -149,21 +200,23 @@ impl HydorVM {
         Ok(())
     }
 
+    #[inline(always)]
     pub(crate) fn pop_value(&mut self) -> Result<RuntimeValue, HydorError> {
         self.stack
             .pop()
             .map(|sv| sv.value)
-            .ok_or(HydorError::StackUnderflow {
+            .ok_or(HydorError::OperandStackUnderflow {
                 stack_length: 0,
                 span: Span::default(),
             })
     }
 
+    #[inline(always)]
     pub(crate) fn pop_with_span(&mut self) -> Result<(RuntimeValue, Span), HydorError> {
         self.stack
             .pop()
             .map(|sv| (sv.value, sv.span))
-            .ok_or(HydorError::StackUnderflow {
+            .ok_or(HydorError::OperandStackUnderflow {
                 stack_length: 0,
                 span: Span::default(),
             })

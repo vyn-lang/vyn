@@ -53,6 +53,10 @@ pub enum OpCode {
     // General equality (works on any type)
     CompareEqual = 0x1E,
     CompareNotEqual = 0x1F,
+
+    // Variable opcodes
+    DeclareGlobal = 0x20,
+    LoadGlobal = 0x21,
 }
 
 impl fmt::Display for OpCode {
@@ -72,6 +76,7 @@ impl fmt::Display for OpCode {
             OpCode::CompareEqual => "==",
             OpCode::CompareNotEqual => "!=",
             OpCode::ConcatString => "+",
+
             _ => return write!(f, "{:?}", self),
         };
         write!(f, "{}", s)
@@ -102,7 +107,7 @@ impl OpCode {
             let width = definition.operands_width[i];
 
             match width {
-                2 => BigEndian::write_i16(&mut instructions[offset..], *operand as i16),
+                2 => BigEndian::write_u16(&mut instructions[offset..], *operand as u16),
 
                 _ => unreachable!(
                     "Cannot make new instruction operand with operand width of {width}"
@@ -255,6 +260,16 @@ impl OpCode {
                 name: "COMPARE_NOT_EQUAL",
                 operands_width: vec![],
             },
+
+            // Variable operations
+            OpCode::DeclareGlobal => Definition {
+                name: "DECLARE_GLOBAL",
+                operands_width: vec![2],
+            },
+            OpCode::LoadGlobal => Definition {
+                name: "LOAD_GLOBAL",
+                operands_width: vec![2],
+            },
         }
     }
 }
@@ -313,6 +328,9 @@ impl ToOpcode for u8 {
             // General equality
             0x1E => OpCode::CompareEqual,
             0x1F => OpCode::CompareNotEqual,
+
+            0x20 => OpCode::DeclareGlobal,
+            0x21 => OpCode::LoadGlobal,
 
             _ => unreachable!("Cannot convert byte '{}' to an opcode", self),
         }

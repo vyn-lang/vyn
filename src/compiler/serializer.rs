@@ -31,6 +31,9 @@ impl Bytecode {
         // Write version
         file.write_u32::<BigEndian>(VERSION)?;
 
+        // Write global count (NEW)
+        file.write_u32::<BigEndian>(self.global_count as u32)?;
+
         // Write instructions length + data
         file.write_u32::<BigEndian>(self.instructions.len() as u32)?;
         file.write_all(&self.instructions)?;
@@ -84,6 +87,9 @@ impl Bytecode {
             ));
         }
 
+        // Read global count
+        let global_count = file.read_u32::<BigEndian>()? as usize;
+
         // Read instructions
         let instructions_len = file.read_u32::<BigEndian>()? as usize;
         let mut instructions = vec![0u8; instructions_len];
@@ -116,6 +122,7 @@ impl Bytecode {
             constants,
             string_table,
             debug_info,
+            global_count,
         })
     }
 

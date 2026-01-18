@@ -3,6 +3,7 @@ use std::mem;
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
     bytecode::bytecode::{Instructions, OpCode},
+    compiler::symbol_table::SymbolTable,
     errors::{ErrorCollector, HydorError},
     runtime_value::RuntimeValue,
     tokens::TokenType,
@@ -15,6 +16,9 @@ pub struct Compiler {
     constants: Vec<RuntimeValue>,
     string_table: Vec<String>,
     debug_info: DebugInfo,
+
+    global_count: usize,
+    symbol_table: SymbolTable,
     errors: ErrorCollector,
 }
 
@@ -23,6 +27,7 @@ pub struct Bytecode {
     pub constants: Vec<RuntimeValue>,
     pub string_table: Vec<String>,
     pub debug_info: DebugInfo,
+    pub global_count: usize,
 }
 
 /// Run-length encoded debug information
@@ -74,6 +79,9 @@ impl Compiler {
             constants: Vec::new(),
             string_table: Vec::new(),
             debug_info: DebugInfo::new(),
+            global_count: 0,
+
+            symbol_table: SymbolTable::new(),
             errors: ErrorCollector::new(),
         }
     }
@@ -119,6 +127,35 @@ impl Compiler {
                 Some(())
             }
 
+            Stmt::VariableDeclaration {
+                identifier,
+                value,
+                span,
+                annotated_type,
+                ..
+            } => {
+                let var_name = match identifier.node {
+                    Expr::Identifier(n) => n,
+                    _ => unreachable!(),
+                };
+                self.compile_expression(value);
+
+                let idx = match self.symbol_table.declare_identifier(
+                    var_name.clone(),
+                    span,
+                    Type::from_anotated_type(&annotated_type),
+                ) {
+                    Ok(i) => i,
+                    Err(he) => {
+                        self.throw_error(he);
+                        return None;
+                    }
+                };
+
+                self.emit(OpCode::DeclareGlobal, vec![idx], span);
+                Some(())
+            }
+
             unknown => {
                 self.throw_error(HydorError::UnknownAST {
                     node: unknown.to_node(),
@@ -160,6 +197,19 @@ impl Compiler {
                 self.emit(OpCode::LoadNil, vec![], span);
             }
 
+            Expr::Identifier(name) => {
+                let symbol = match self.symbol_table.resolve_identifier(&name, span) {
+                    Ok(s) => s,
+                    Err(he) => {
+                        self.throw_error(he);
+                        return None;
+                    }
+                };
+
+                let idx = symbol.index;
+                self.emit(OpCode::LoadGlobal, vec![idx], span);
+            }
+
             Expr::Unary {
                 ref operator,
                 ref right,
@@ -172,7 +222,7 @@ impl Compiler {
 
                 // Can't fold, compile normally
                 let right_expr = (**right).clone();
-                let operand_type = self.get_expr_type(right);
+                let operand_type = self.get_expr_type(right)?;
 
                 self.compile_expression(right_expr)?;
 
@@ -206,8 +256,8 @@ impl Compiler {
                     return Some(());
                 }
 
-                let left_type = self.get_expr_type(&left);
-                let right_type = self.get_expr_type(&right);
+                let left_type = self.get_expr_type(&left)?;
+                let right_type = self.get_expr_type(&right)?;
 
                 self.compile_binary_expr(
                     left_type, *left, right_type, *right, operator, expr.span,
@@ -226,13 +276,23 @@ impl Compiler {
         Some(())
     }
 
-    pub(crate) fn get_expr_type(&self, expr: &Expression) -> Type {
+    pub(crate) fn get_expr_type(&mut self, expr: &Expression) -> Option<Type> {
         match &expr.node {
-            Expr::IntegerLiteral(_) => Type::Integer,
-            Expr::FloatLiteral(_) => Type::Float,
-            Expr::BooleanLiteral(_) => Type::Bool,
-            Expr::StringLiteral(_) => Type::String,
-            Expr::NilLiteral => Type::Nil,
+            Expr::IntegerLiteral(_) => Some(Type::Integer),
+            Expr::FloatLiteral(_) => Some(Type::Float),
+            Expr::BooleanLiteral(_) => Some(Type::Bool),
+            Expr::StringLiteral(_) => Some(Type::String),
+            Expr::NilLiteral => Some(Type::Nil),
+            Expr::Identifier(n) => {
+                let symbol = self.symbol_table.resolve_identifier(n, expr.span);
+                match symbol {
+                    Ok(s) => Some(s.symbol_type.clone()),
+                    Err(he) => {
+                        self.throw_error(he);
+                        return None;
+                    }
+                }
+            }
 
             Expr::Unary { right, operator } => {
                 match operator.get_token_type() {
@@ -242,7 +302,7 @@ impl Compiler {
                     }
                     TokenType::Not => {
                         // !x is always Bool
-                        Type::Bool
+                        Some(Type::Bool)
                     }
                     _ => unreachable!(),
                 }
@@ -260,12 +320,12 @@ impl Compiler {
                 | TokenType::GreaterThan
                 | TokenType::GreaterThanEqual
                 | TokenType::Equal
-                | TokenType::NotEqual => Type::Bool,
+                | TokenType::NotEqual => Some(Type::Bool),
 
                 _ => unreachable!(),
             },
 
-            _ => unreachable!("Unknown expression type"),
+            _ => unreachable!("Unknown expression type\n\n{:#?}", expr.node),
         }
     }
 
@@ -291,6 +351,7 @@ impl Compiler {
             constants: mem::take(&mut self.constants),
             string_table: mem::take(&mut self.string_table),
             debug_info: mem::take(&mut self.debug_info),
+            global_count: self.global_count,
         }
     }
 
@@ -318,6 +379,14 @@ impl Compiler {
 
     /// Add a constant to the constants table
     pub(crate) fn add_constant(&mut self, value: RuntimeValue) -> usize {
+        if let Some(pos) = self
+            .constants
+            .iter()
+            .position(|existing| existing == &value)
+        {
+            return pos;
+        }
+
         self.constants.push(value);
         self.constants.len() - 1
     }

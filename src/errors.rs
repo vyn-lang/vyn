@@ -24,6 +24,10 @@ pub enum HydorError {
         got: String,
         span: Span,
     },
+    ExpectedType {
+        got: TokenType,
+        span: Span,
+    },
 
     // ----- Type Checker -----
     TypeMismatch {
@@ -68,12 +72,17 @@ pub enum HydorError {
     },
 
     // ----- HydorVM -----
-    StackUnderflow {
+    OperandStackUnderflow {
         stack_length: usize,
         span: Span,
     },
-    StackOverflow {
+    OperandStackOverflow {
         stack_length: usize,
+        span: Span,
+    },
+    GlobalStackOverflow {
+        stack_length: usize,
+        max: usize,
         span: Span,
     },
 
@@ -103,6 +112,7 @@ impl HydorError {
             HydorError::ExpectedToken { span, .. } => *span,
             HydorError::KeywordTypeError { span, .. } => *span,
             HydorError::InvalidTypeName { span, .. } => *span,
+            HydorError::ExpectedType { span, .. } => *span,
 
             HydorError::TypeMismatch { span, .. } => *span,
             HydorError::InvalidUnaryOp { span, .. } => *span,
@@ -116,8 +126,9 @@ impl HydorError {
             HydorError::UnknownAST { span, .. } => *span,
             HydorError::UndefinedIdentifier { span, .. } => *span,
 
-            HydorError::StackUnderflow { span, .. } => *span,
-            HydorError::StackOverflow { span, .. } => *span,
+            HydorError::OperandStackUnderflow { span, .. } => *span,
+            HydorError::OperandStackOverflow { span, .. } => *span,
+            HydorError::GlobalStackOverflow { span, .. } => *span,
             HydorError::ArithmeticError { span, .. } => *span,
             HydorError::UnaryOperationError { span, .. } => *span,
             HydorError::ComparisonOperationError { span, .. } => *span,
@@ -130,6 +141,7 @@ impl HydorError {
             HydorError::ExpectedToken { .. } => "Syntax",
             HydorError::KeywordTypeError { .. } => "Syntax",
             HydorError::InvalidTypeName { .. } => "Syntax",
+            HydorError::ExpectedType { .. } => "Syntax",
 
             HydorError::TypeMismatch { .. } => "Type",
             HydorError::InvalidUnaryOp { .. } => "Type",
@@ -141,8 +153,9 @@ impl HydorError {
             HydorError::UnknownAST { .. } => "Compiler",
             HydorError::UndefinedIdentifier { .. } => "Compiler",
 
-            HydorError::StackUnderflow { .. } => "Runtime",
-            HydorError::StackOverflow { .. } => "Runtime",
+            HydorError::OperandStackUnderflow { .. } => "Runtime",
+            HydorError::OperandStackOverflow { .. } => "Runtime",
+            HydorError::GlobalStackOverflow { .. } => "Runtime",
             HydorError::ArithmeticError { .. } => "Runtime",
             HydorError::UnaryOperationError { .. } => "Runtime",
             HydorError::ComparisonOperationError { .. } => "Runtime",
@@ -162,6 +175,9 @@ impl HydorError {
             }
             HydorError::InvalidTypeName { got, .. } => {
                 format!("'{}' is not a valid type", got)
+            }
+            HydorError::ExpectedType { got, .. } => {
+                format!("Expected type annotation, got '{got}' instead")
             }
             HydorError::DeclarationTypeMismatch { got, expected, .. } => {
                 format!(
@@ -244,16 +260,26 @@ impl HydorError {
                 )
             }
 
-            HydorError::StackUnderflow { stack_length, .. } => {
+            HydorError::OperandStackUnderflow { stack_length, .. } => {
                 format!(
-                    "Stack underflow: attempted to pop from stack with {} elements",
+                    "Operand stack underflow: attempted to pop from stack with {} elements",
                     stack_length
                 )
             }
-            HydorError::StackOverflow { stack_length, .. } => {
+
+            HydorError::OperandStackOverflow { stack_length, .. } => {
                 format!(
-                    "Stack overflow: stack exceeded maximum size (current size: {})",
+                    "Operand stack overflow: expression stack exceeded maximum size (current size: {})",
                     stack_length
+                )
+            }
+
+            HydorError::GlobalStackOverflow {
+                stack_length, max, ..
+            } => {
+                format!(
+                    "Global stack overflow: too many global variables ({} / max {})",
+                    stack_length, max
                 )
             }
 
@@ -311,6 +337,9 @@ impl HydorError {
             HydorError::KeywordTypeError { .. } => {
                 Some("Keywords are reserved and cannot be used as type names".to_string())
             }
+            HydorError::ExpectedType { got, .. } => Some(format!(
+                "Insert a valid type before '{got}' based on the assigned value"
+            )),
             HydorError::InvalidTypeName { .. } => {
                 Some("Available types: Int, Float, Bool, String".to_string())
             }
@@ -375,11 +404,19 @@ impl HydorError {
                     .to_string(),
             ),
 
-            HydorError::StackUnderflow { .. } => {
+            HydorError::OperandStackUnderflow { .. } => {
                 Some("This is a virtual machine bug. Please report this issue".to_string())
             }
-            HydorError::StackOverflow { .. } => {
-                Some("Reduce expression complexity or split into smaller statements".to_string())
+
+            HydorError::OperandStackOverflow { .. } => {
+                Some("Reduce expression complexity or split expressions into smaller statements".to_string())
+            }
+
+            HydorError::GlobalStackOverflow { .. } => {
+                Some(
+                    "Reduce the number of global variables, or move values into local scopes or functions"
+                    .to_string(),
+                )
             }
 
             HydorError::ArithmeticError {

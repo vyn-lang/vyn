@@ -1,1 +1,4 @@
-not(198+10/2)
+let x: Int = 10
+let y: Int = x*10+1
+
+y+x

@@ -17,6 +17,7 @@ pub enum Type {
     Bool,
     String,
     Nil,
+    Identifier,
 }
 
 impl fmt::Display for Type {
@@ -27,6 +28,7 @@ impl fmt::Display for Type {
             Type::Bool => write!(f, "Bool"),
             Type::String => write!(f, "String"),
             Type::Nil => write!(f, "Nil"),
+            Type::Identifier => write!(f, "Identifier"),
         }
     }
 }

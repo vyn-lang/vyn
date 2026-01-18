@@ -122,7 +122,7 @@ impl Parser {
         }
     }
 
-    fn expect(&mut self, token_type: TokenType) -> bool {
+    pub(crate) fn expect(&mut self, token_type: TokenType) -> bool {
         if self.current_token().token.get_token_type() != token_type {
             self.errors.add(HydorError::ExpectedToken {
                 expected: token_type,
@@ -484,6 +484,7 @@ impl Parser {
         if !self.expect(TokenType::Colon) {
             return None;
         }
+
         let an_type = self.try_parse_type()?;
         if !self.expect(TokenType::Assign) {
             return None;

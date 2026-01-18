@@ -10,8 +10,7 @@ impl Parser {
 
         // check if is identifier
         if current_token_type != TokenType::Identifier {
-            self.errors.add(HydorError::ExpectedToken {
-                expected: TokenType::Identifier,
+            self.errors.add(HydorError::ExpectedType {
                 got: current_token_type,
                 span: current_token.span,
             });
