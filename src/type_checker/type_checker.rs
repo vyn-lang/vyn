@@ -92,24 +92,24 @@ impl TypeChecker {
                     _ => unreachable!("Var names are always identifiers"),
                 };
 
-                // Early store so future reference of the identifier
-                // wont return an "undeclared variable" error
-                self.symbol_type_table.declare_identifier(
-                    var_name,
-                    an_type.clone(),
-                    *span,
-                    &mut self.errors,
-                )?;
-
+                // Check type match first
                 if an_type != value_type {
                     self.throw_error(HydorError::DeclarationTypeMismatch {
-                        expected: an_type,
+                        expected: an_type.clone(),
                         got: value_type,
                         span: *span,
                     });
 
                     return Err(());
                 }
+
+                // Declare in symbol table (no register assignment during type checking)
+                self.symbol_type_table.declare_identifier(
+                    var_name,
+                    an_type,
+                    *span,
+                    &mut self.errors,
+                )?;
 
                 Ok(())
             }

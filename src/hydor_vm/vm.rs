@@ -1,232 +1,553 @@
 use crate::{
-    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint16},
-    compiler::compiler::{Bytecode, DebugInfo},
-    errors::HydorError,
+    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16},
     runtime_value::RuntimeValue,
-    utils::Span,
 };
-
-const MAX_STACK: usize = 10_000;
-const GLOBAL_STACK: usize = 4028;
+/*
+ * TODO: Refactor VM
+ * */
+// Singletons for common values
+const NIL: RuntimeValue = RuntimeValue::NilLiteral;
+const TRUE: RuntimeValue = RuntimeValue::BooleanLiteral(true);
+const FALSE: RuntimeValue = RuntimeValue::BooleanLiteral(false);
 
 pub struct HydorVM {
-    stack: Vec<StackValue>,
-    globals: Vec<StackValue>,
-    last_pop: Option<RuntimeValue>,
-
-    pub instructions: Instructions,
-    pub ip: usize,
-
-    pub string_table: Vec<String>,
-    pub constants: Vec<RuntimeValue>,
-
-    debug_info: DebugInfo,
+    // Registers store actual RuntimeValues
+    registers: [RuntimeValue; 256],
+    // Constant pool
+    constants: Vec<RuntimeValue>,
+    // String table (since strings are stored by index)
+    strings: Vec<String>,
+    // Program bytecode
+    instructions: Instructions,
+    // Instruction pointer
+    ip: usize,
 }
-
-#[derive(Debug, Clone, Copy)]
-struct StackValue {
-    value: RuntimeValue,
-    span: Span,
-}
-
-// SINGLETON ---
-pub const BOOLEAN_TRUE: RuntimeValue = RuntimeValue::BooleanLiteral(true);
-pub const BOOLEAN_FALSE: RuntimeValue = RuntimeValue::BooleanLiteral(false);
-pub const NIL_LITERAL: RuntimeValue = RuntimeValue::NilLiteral;
 
 impl HydorVM {
-    pub fn new(bytecode: Bytecode) -> Self {
+    pub fn new(
+        instructions: Instructions,
+        constants: Vec<RuntimeValue>,
+        strings: Vec<String>,
+    ) -> Self {
         Self {
-            stack: Vec::with_capacity(MAX_STACK),
-            globals: Vec::new(), // Start empty
-            last_pop: None,
-
-            string_table: bytecode.string_table,
-            instructions: bytecode.instructions,
+            registers: [NIL; 256], // Initialize all to Nil singleton
+            constants,
+            strings,
+            instructions,
             ip: 0,
-
-            constants: bytecode.constants,
-            debug_info: bytecode.debug_info,
         }
     }
 
-    /// Main entry point
-    pub fn execute_bytecode(&mut self) -> Result<(), HydorError> {
-        while self.ip < self.instructions.len() {
+    pub fn run(&mut self) -> Result<(), String> {
+        loop {
             let opcode = self.instructions[self.ip].to_opcode();
-            let span = self.debug_info.get_span(self.ip);
 
             match opcode {
-                OpCode::LoadConstant => self.load_constant(span)?,
-                OpCode::LoadString => self.load_string(span)?,
-                OpCode::LoadNil => self.push(NIL_LITERAL, span)?,
-                OpCode::LoadBoolTrue => self.push(BOOLEAN_TRUE, span)?,
-                OpCode::LoadBoolFalse => self.push(BOOLEAN_FALSE, span)?,
-
-                OpCode::AddInt | OpCode::AddFloat => self.binary_op(opcode, span)?,
-                OpCode::SubtractInt | OpCode::SubtractFloat => self.binary_op(opcode, span)?,
-                OpCode::MultiplyInt | OpCode::MultiplyFloat => self.binary_op(opcode, span)?,
-                OpCode::DivideInt | OpCode::DivideFloat => self.binary_op(opcode, span)?,
-                OpCode::ExponentInt | OpCode::ExponentFloat => self.binary_op(opcode, span)?,
-
-                OpCode::ConcatString => self.string_concat(span)?,
-
-                OpCode::UnaryNegateInt | OpCode::UnaryNegateFloat => {
-                    self.unary_operation(opcode, span)?
+                OpCode::Halt => {
+                    break;
                 }
-                OpCode::UnaryNot => self.unary_operation(opcode, span)?,
 
-                OpCode::CompareLessInt
-                | OpCode::CompareLessFloat
-                | OpCode::CompareLessEqualInt
-                | OpCode::CompareLessEqualFloat
-                | OpCode::CompareGreaterInt
-                | OpCode::CompareGreaterFloat
-                | OpCode::CompareGreaterEqualInt
-                | OpCode::CompareGreaterEqualFloat
-                | OpCode::CompareEqual
-                | OpCode::CompareNotEqual => self.compare_operation(opcode, span)?,
+                // Load operations
+                OpCode::LoadConstInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let const_index = read_uint16(&self.instructions, self.ip + 2) as usize;
 
-                OpCode::LoadGlobal => {
-                    let global_index = read_uint16(&self.instructions, self.ip + 1);
+                    let value = self
+                        .constants
+                        .get(const_index)
+                        .ok_or(format!("Invalid constant index {}", const_index))?;
+
+                    if let Some(val) = value.as_int() {
+                        self.registers[dest as usize] = RuntimeValue::IntegerLiteral(val);
+                    } else {
+                        return Err(format!(
+                            "Expected integer constant at index {}",
+                            const_index
+                        ));
+                    }
+
+                    self.ip += 4; // opcode + dest(1) + index(2)
+                }
+
+                OpCode::LoadConstFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let const_index = read_uint16(&self.instructions, self.ip + 2) as usize;
+
+                    let value = self
+                        .constants
+                        .get(const_index)
+                        .ok_or(format!("Invalid constant index {}", const_index))?;
+
+                    if let Some(val) = value.as_float() {
+                        self.registers[dest as usize] = RuntimeValue::FloatLiteral(val);
+                    } else {
+                        return Err(format!("Expected float constant at index {}", const_index));
+                    }
+
+                    self.ip += 4;
+                }
+
+                OpCode::LoadString => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let string_index = read_uint16(&self.instructions, self.ip + 2) as usize;
+
+                    if string_index < self.strings.len() {
+                        self.registers[dest as usize] = RuntimeValue::StringLiteral(string_index);
+                    } else {
+                        return Err(format!("Invalid string index {}", string_index));
+                    }
+
+                    self.ip += 4;
+                }
+
+                OpCode::LoadNil => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    self.registers[dest as usize] = NIL; // Singleton!
                     self.ip += 2;
-
-                    let global = self.get_global(global_index as usize);
-                    self.push(global.value, span)?;
                 }
 
-                OpCode::DeclareGlobal => {
-                    let global_idx = read_uint16(&self.instructions, self.ip + 1);
+                OpCode::LoadTrue => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    self.registers[dest as usize] = TRUE; // Singleton!
                     self.ip += 2;
-
-                    let (value, span) = self.pop_with_span()?;
-                    self.add_global(global_idx as usize, StackValue { value, span })?;
                 }
 
-                OpCode::Pop => {
-                    self.last_pop = Some(self.pop_value()?);
+                OpCode::LoadFalse => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    self.registers[dest as usize] = FALSE; // Singleton!
+                    self.ip += 2;
                 }
-                OpCode::Halt => return Ok(()),
-                _ => unreachable!(),
+
+                // Integer arithmetic
+                OpCode::AddInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_int()
+                        .ok_or("AddInt: left operand is not an integer")?;
+                    let b = self.registers[right as usize]
+                        .as_int()
+                        .ok_or("AddInt: right operand is not an integer")?;
+
+                    self.registers[dest as usize] = RuntimeValue::IntegerLiteral(a + b);
+                    self.ip += 4;
+                }
+
+                OpCode::SubtractInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_int()
+                        .ok_or("SubtractInt: left operand is not an integer")?;
+                    let b = self.registers[right as usize]
+                        .as_int()
+                        .ok_or("SubtractInt: right operand is not an integer")?;
+
+                    self.registers[dest as usize] = RuntimeValue::IntegerLiteral(a - b);
+                    self.ip += 4;
+                }
+
+                OpCode::MultiplyInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_int()
+                        .ok_or("MultiplyInt: left operand is not an integer")?;
+                    let b = self.registers[right as usize]
+                        .as_int()
+                        .ok_or("MultiplyInt: right operand is not an integer")?;
+
+                    self.registers[dest as usize] = RuntimeValue::IntegerLiteral(a * b);
+                    self.ip += 4;
+                }
+
+                OpCode::DivideInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_int()
+                        .ok_or("DivideInt: left operand is not an integer")?;
+                    let b = self.registers[right as usize]
+                        .as_int()
+                        .ok_or("DivideInt: right operand is not an integer")?;
+
+                    if b == 0 {
+                        return Err("Division by zero".to_string());
+                    }
+
+                    self.registers[dest as usize] = RuntimeValue::IntegerLiteral(a / b);
+                    self.ip += 4;
+                }
+
+                OpCode::ExponentInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_int()
+                        .ok_or("ExponentInt: left operand is not an integer")?;
+                    let b = self.registers[right as usize]
+                        .as_int()
+                        .ok_or("ExponentInt: right operand is not an integer")?;
+
+                    if b < 0 {
+                        return Err("Negative exponent for integer".to_string());
+                    }
+
+                    self.registers[dest as usize] = RuntimeValue::IntegerLiteral(a.pow(b as u32));
+                    self.ip += 4;
+                }
+
+                // Float arithmetic
+                OpCode::AddFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_float()
+                        .ok_or("AddFloat: left operand is not a float")?;
+                    let b = self.registers[right as usize]
+                        .as_float()
+                        .ok_or("AddFloat: right operand is not a float")?;
+
+                    self.registers[dest as usize] = RuntimeValue::FloatLiteral(a + b);
+                    self.ip += 4;
+                }
+
+                OpCode::SubtractFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_float()
+                        .ok_or("SubtractFloat: left operand is not a float")?;
+                    let b = self.registers[right as usize]
+                        .as_float()
+                        .ok_or("SubtractFloat: right operand is not a float")?;
+
+                    self.registers[dest as usize] = RuntimeValue::FloatLiteral(a - b);
+                    self.ip += 4;
+                }
+
+                OpCode::MultiplyFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_float()
+                        .ok_or("MultiplyFloat: left operand is not a float")?;
+                    let b = self.registers[right as usize]
+                        .as_float()
+                        .ok_or("MultiplyFloat: right operand is not a float")?;
+
+                    self.registers[dest as usize] = RuntimeValue::FloatLiteral(a * b);
+                    self.ip += 4;
+                }
+
+                OpCode::DivideFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_float()
+                        .ok_or("DivideFloat: left operand is not a float")?;
+                    let b = self.registers[right as usize]
+                        .as_float()
+                        .ok_or("DivideFloat: right operand is not a float")?;
+
+                    self.registers[dest as usize] = RuntimeValue::FloatLiteral(a / b);
+                    self.ip += 4;
+                }
+
+                OpCode::ExponentFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_float()
+                        .ok_or("ExponentFloat: left operand is not a float")?;
+                    let b = self.registers[right as usize]
+                        .as_float()
+                        .ok_or("ExponentFloat: right operand is not a float")?;
+
+                    self.registers[dest as usize] = RuntimeValue::FloatLiteral(a.powf(b));
+                    self.ip += 4;
+                }
+
+                // Unary operations
+                OpCode::NegateInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let src = read_uint8(&self.instructions, self.ip + 2);
+
+                    let val = self.registers[src as usize]
+                        .as_int()
+                        .ok_or("NegateInt: operand is not an integer")?;
+
+                    self.registers[dest as usize] = RuntimeValue::IntegerLiteral(-val);
+                    self.ip += 3;
+                }
+
+                OpCode::NegateFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let src = read_uint8(&self.instructions, self.ip + 2);
+
+                    let val = self.registers[src as usize]
+                        .as_float()
+                        .ok_or("NegateFloat: operand is not a float")?;
+
+                    self.registers[dest as usize] = RuntimeValue::FloatLiteral(-val);
+                    self.ip += 3;
+                }
+
+                OpCode::Not => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let src = read_uint8(&self.instructions, self.ip + 2);
+
+                    let val = self.registers[src as usize]
+                        .as_bool()
+                        .ok_or("Not: operand is not a boolean")?;
+
+                    // Use singletons!
+                    self.registers[dest as usize] = if val { FALSE } else { TRUE };
+                    self.ip += 3;
+                }
+
+                // Integer comparisons
+                OpCode::LessInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_int()
+                        .ok_or("LessInt: left operand is not an integer")?;
+                    let b = self.registers[right as usize]
+                        .as_int()
+                        .ok_or("LessInt: right operand is not an integer")?;
+
+                    // Use singletons!
+                    self.registers[dest as usize] = if a < b { TRUE } else { FALSE };
+                    self.ip += 4;
+                }
+
+                OpCode::LessEqualInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_int()
+                        .ok_or("LessEqualInt: left operand is not an integer")?;
+                    let b = self.registers[right as usize]
+                        .as_int()
+                        .ok_or("LessEqualInt: right operand is not an integer")?;
+
+                    self.registers[dest as usize] = if a <= b { TRUE } else { FALSE };
+                    self.ip += 4;
+                }
+
+                OpCode::GreaterInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_int()
+                        .ok_or("GreaterInt: left operand is not an integer")?;
+                    let b = self.registers[right as usize]
+                        .as_int()
+                        .ok_or("GreaterInt: right operand is not an integer")?;
+
+                    self.registers[dest as usize] = if a > b { TRUE } else { FALSE };
+                    self.ip += 4;
+                }
+
+                OpCode::GreaterEqualInt => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_int()
+                        .ok_or("GreaterEqualInt: left operand is not an integer")?;
+                    let b = self.registers[right as usize]
+                        .as_int()
+                        .ok_or("GreaterEqualInt: right operand is not an integer")?;
+
+                    self.registers[dest as usize] = if a >= b { TRUE } else { FALSE };
+                    self.ip += 4;
+                }
+
+                // Float comparisons
+                OpCode::LessFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_float()
+                        .ok_or("LessFloat: left operand is not a float")?;
+                    let b = self.registers[right as usize]
+                        .as_float()
+                        .ok_or("LessFloat: right operand is not a float")?;
+
+                    self.registers[dest as usize] = if a < b { TRUE } else { FALSE };
+                    self.ip += 4;
+                }
+
+                OpCode::LessEqualFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_float()
+                        .ok_or("LessEqualFloat: left operand is not a float")?;
+                    let b = self.registers[right as usize]
+                        .as_float()
+                        .ok_or("LessEqualFloat: right operand is not a float")?;
+
+                    self.registers[dest as usize] = if a <= b { TRUE } else { FALSE };
+                    self.ip += 4;
+                }
+
+                OpCode::GreaterFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[left as usize]
+                        .as_float()
+                        .ok_or("GreaterFloat: left operand is not a float")?;
+                    let b = self.registers[right as usize]
+                        .as_float()
+                        .ok_or("GreaterFloat: right operand is not a float")?;
+
+                    self.registers[dest as usize] = if a > b { TRUE } else { FALSE };
+                    self.ip += 4;
+                }
+
+                OpCode::GreaterEqualFloat => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = self.registers[right as usize]
+                        .as_float()
+                        .ok_or("GreaterEqualFloat: left operand is not a float")?;
+                    let b = self.registers[right as usize]
+                        .as_float()
+                        .ok_or("GreaterEqualFloat: right operand is not a float")?;
+
+                    self.registers[dest as usize] = if a >= b { TRUE } else { FALSE };
+                    self.ip += 4;
+                }
+
+                // General equality (works on any type)
+                OpCode::Equal => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = &self.registers[left as usize];
+                    let b = &self.registers[right as usize];
+
+                    self.registers[dest as usize] = if a == b { TRUE } else { FALSE };
+                    self.ip += 4;
+                }
+
+                OpCode::NotEqual => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a = &self.registers[left as usize];
+                    let b = &self.registers[right as usize];
+
+                    self.registers[dest as usize] = if a != b { TRUE } else { FALSE };
+                    self.ip += 4;
+                }
+
+                // String operations
+                OpCode::ConcatString => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let left = read_uint8(&self.instructions, self.ip + 2);
+                    let right = read_uint8(&self.instructions, self.ip + 3);
+
+                    let a_idx = self.registers[left as usize]
+                        .as_string_index()
+                        .ok_or("ConcatString: left operand is not a string")?;
+                    let b_idx = self.registers[right as usize]
+                        .as_string_index()
+                        .ok_or("ConcatString: right operand is not a string")?;
+
+                    let a_str = self
+                        .strings
+                        .get(a_idx)
+                        .ok_or(format!("Invalid string index {}", a_idx))?;
+                    let b_str = self
+                        .strings
+                        .get(b_idx)
+                        .ok_or(format!("Invalid string index {}", b_idx))?;
+
+                    let result = format!("{}{}", a_str, b_str);
+                    self.strings.push(result);
+                    let new_index = self.strings.len() - 1;
+
+                    self.registers[dest as usize] = RuntimeValue::StringLiteral(new_index);
+                    self.ip += 4;
+                }
+
+                // Move
+                OpCode::Move => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1);
+                    let src = read_uint8(&self.instructions, self.ip + 2);
+
+                    self.registers[dest as usize] = self.registers[src as usize];
+                    self.ip += 3;
+                }
+
+                _ => {
+                    return Err(format!("Unimplemented opcode: {:?}", opcode));
+                }
             }
-
-            self.ip += 1;
         }
 
-        unreachable!()
-    }
-
-    #[inline(always)]
-    pub(crate) fn push(&mut self, value: RuntimeValue, span: Span) -> Result<(), HydorError> {
-        if self.stack.len() >= MAX_STACK {
-            return Err(HydorError::OperandStackOverflow {
-                stack_length: self.stack.len(),
-                span,
-            });
-        }
-
-        self.stack.push(StackValue { value, span });
         Ok(())
     }
 
-    #[inline(always)]
-    pub(crate) fn add_global(&mut self, idx: usize, value: StackValue) -> Result<(), HydorError> {
-        if idx >= GLOBAL_STACK {
-            return Err(HydorError::GlobalStackOverflow {
-                stack_length: self.globals.len(),
-                max: GLOBAL_STACK,
-                span: value.span,
-            });
-        }
-
-        // Grow lazily only when needed
-        if idx >= self.globals.len() {
-            self.globals.resize(
-                idx + 1,
-                StackValue {
-                    value: NIL_LITERAL,
-                    span: Span::default(),
-                },
-            );
-        }
-
-        self.globals[idx] = value;
-        Ok(())
+    // Public accessor methods for debugging/testing
+    pub fn get_register(&self, reg: u8) -> &RuntimeValue {
+        &self.registers[reg as usize]
     }
 
-    #[inline(always)]
-    pub(crate) fn get_global(&self, idx: usize) -> StackValue {
-        self.globals[idx]
+    pub fn get_register_as_int(&self, reg: u8) -> Option<i32> {
+        self.registers[reg as usize].as_int()
     }
 
-    pub(crate) fn peek_offset(&self, n: usize) -> Result<RuntimeValue, HydorError> {
-        let size = self.stack.len();
-        if n >= size {
-            return Err(HydorError::OperandStackUnderflow {
-                stack_length: MAX_STACK,
-                span: Span::default(),
-            });
-        }
-
-        Ok(self.stack[size - 1 - n].value)
+    pub fn get_register_as_float(&self, reg: u8) -> Option<f64> {
+        self.registers[reg as usize].as_float()
     }
 
-    pub(crate) fn peek_span(&self, n: usize) -> Result<Span, HydorError> {
-        let size = self.stack.len();
-        if n >= size {
-            return Err(HydorError::OperandStackUnderflow {
-                stack_length: size,
-                span: Span::default(),
-            });
-        }
-
-        Ok(self.stack[size - 1 - n].span)
+    pub fn get_register_as_bool(&self, reg: u8) -> Option<bool> {
+        self.registers[reg as usize].as_bool()
     }
 
-    pub(crate) fn set_offset_value(
-        &mut self,
-        n: usize,
-        new_value: RuntimeValue,
-    ) -> Result<(), HydorError> {
-        let size = self.stack.len();
-        if n >= size {
-            return Err(HydorError::OperandStackUnderflow {
-                stack_length: size,
-                span: Span::default(),
-            });
-        }
-
-        self.stack[size - 1 - n].value = new_value;
-        Ok(())
-    }
-
-    #[inline(always)]
-    pub(crate) fn pop_value(&mut self) -> Result<RuntimeValue, HydorError> {
-        self.stack
-            .pop()
-            .map(|sv| sv.value)
-            .ok_or(HydorError::OperandStackUnderflow {
-                stack_length: 0,
-                span: Span::default(),
-            })
-    }
-
-    #[inline(always)]
-    pub(crate) fn pop_with_span(&mut self) -> Result<(RuntimeValue, Span), HydorError> {
-        self.stack
-            .pop()
-            .map(|sv| (sv.value, sv.span))
-            .ok_or(HydorError::OperandStackUnderflow {
-                stack_length: 0,
-                span: Span::default(),
-            })
-    }
-
-    pub fn resolve_string(&self, index: usize) -> &str {
-        &self.string_table[index]
-    }
-
-    pub fn last_popped(&self) -> Option<RuntimeValue> {
-        self.last_pop
+    pub fn get_string(&self, index: usize) -> Option<&String> {
+        self.strings.get(index)
     }
 }

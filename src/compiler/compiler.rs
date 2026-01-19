@@ -17,21 +17,21 @@ pub struct Compiler {
     string_table: Vec<String>,
     debug_info: DebugInfo,
 
-    global_count: usize,
+    next_register: u8,
     symbol_table: SymbolTable,
     errors: ErrorCollector,
 }
 
+#[derive(Debug)]
 pub struct Bytecode {
     pub instructions: Instructions,
     pub constants: Vec<RuntimeValue>,
     pub string_table: Vec<String>,
     pub debug_info: DebugInfo,
-    pub global_count: usize,
 }
 
 /// Run-length encoded debug information
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct DebugInfo {
     pub line_changes: Vec<(usize, u32)>,
     pub start_col_changes: Vec<(usize, u32)>,
@@ -79,7 +79,7 @@ impl Compiler {
             constants: Vec::new(),
             string_table: Vec::new(),
             debug_info: DebugInfo::new(),
-            global_count: 0,
+            next_register: 0,
 
             symbol_table: SymbolTable::new(),
             errors: ErrorCollector::new(),
@@ -100,15 +100,7 @@ impl Compiler {
             }
         }
 
-        self.emit(
-            OpCode::Halt,
-            vec![],
-            Span {
-                line: 0,
-                start_column: 0,
-                end_column: 0,
-            },
-        );
+        self.emit(OpCode::Halt, vec![], Span::default());
 
         if self.errors.has_errors() {
             Err(mem::take(&mut self.errors))
@@ -123,7 +115,6 @@ impl Compiler {
         match stmt.node {
             Stmt::Expression { expression } => {
                 self.compile_expression(expression)?;
-                self.emit(OpCode::Pop, vec![], span);
                 Some(())
             }
 
@@ -136,23 +127,26 @@ impl Compiler {
             } => {
                 let var_name = match identifier.node {
                     Expr::Identifier(n) => n,
-                    _ => unreachable!(),
+                    _ => unreachable!("Variable name must be identifier"),
                 };
-                self.compile_expression(value);
 
-                let idx = match self.symbol_table.declare_identifier(
+                // Compile the value expression into a register
+                let value_reg = self.compile_expression(value)?;
+
+                // Store the variable -> register mapping
+                match self.symbol_table.declare_identifier(
                     var_name.clone(),
                     span,
                     Type::from_anotated_type(&annotated_type),
+                    value_reg,
                 ) {
-                    Ok(i) => i,
+                    Ok(_) => {}
                     Err(he) => {
                         self.throw_error(he);
                         return None;
                     }
                 };
 
-                self.emit(OpCode::DeclareGlobal, vec![idx], span);
                 Some(())
             }
 
@@ -161,40 +155,60 @@ impl Compiler {
                     node: unknown.to_node(),
                     span,
                 });
-                return None;
+                None
             }
         }
     }
 
-    pub(crate) fn compile_expression(&mut self, expr: Expression) -> Option<()> {
+    pub(crate) fn compile_expression(&mut self, expr: Expression) -> Option<u8> {
         let span = expr.span;
 
         match expr.node {
             Expr::IntegerLiteral(v) => {
-                let idx = self.add_constant(RuntimeValue::IntegerLiteral(v));
-                self.emit(OpCode::LoadConstant, vec![idx], span);
+                let dest = self.allocate_register()?;
+                let const_idx = self.add_constant(RuntimeValue::IntegerLiteral(v));
+
+                self.emit(OpCode::LoadConstInt, vec![dest as usize, const_idx], span);
+
+                Some(dest)
             }
 
             Expr::FloatLiteral(v) => {
-                let idx = self.add_constant(RuntimeValue::FloatLiteral(v));
-                self.emit(OpCode::LoadConstant, vec![idx], span);
+                let dest = self.allocate_register()?;
+                let const_idx = self.add_constant(RuntimeValue::FloatLiteral(v));
+
+                self.emit(OpCode::LoadConstFloat, vec![dest as usize, const_idx], span);
+
+                Some(dest)
             }
 
             Expr::BooleanLiteral(truethy) => {
+                let dest = self.allocate_register()?;
+
                 if truethy {
-                    self.emit(OpCode::LoadBoolTrue, vec![], span);
+                    self.emit(OpCode::LoadTrue, vec![dest as usize], span);
                 } else {
-                    self.emit(OpCode::LoadBoolFalse, vec![], span);
+                    self.emit(OpCode::LoadFalse, vec![dest as usize], span);
                 }
+
+                Some(dest)
             }
 
             Expr::StringLiteral(v) => {
+                let dest = self.allocate_register()?;
                 let str_idx = self.intern_string(v);
-                self.emit(OpCode::LoadString, vec![str_idx], span);
+
+                self.emit(OpCode::LoadString, vec![dest as usize, str_idx], span);
+
+                Some(dest)
             }
 
             Expr::NilLiteral => {
-                self.emit(OpCode::LoadNil, vec![], span);
+                let dest = self.allocate_register()?;
+
+                self.emit(OpCode::LoadNil, vec![dest as usize], span);
+
+                Some(dest)
             }
 
             Expr::Identifier(name) => {
@@ -206,30 +220,36 @@ impl Compiler {
                     }
                 };
 
-                let idx = symbol.index;
-                self.emit(OpCode::LoadGlobal, vec![idx], span);
+                // Just return the register where this variable lives
+                Some(symbol.register)
             }
 
             Expr::Unary {
                 ref operator,
                 ref right,
             } => {
-                // Try to fold unary expression first
-                if let Some(folded) = self.eval_to_constant(&expr) {
-                    self.emit_constant(folded, span);
-                    return Some(());
-                }
-
-                // Can't fold, compile normally
                 let right_expr = (**right).clone();
                 let operand_type = self.get_expr_type(right)?;
 
-                self.compile_expression(right_expr)?;
+                let src_reg = self.compile_expression(right_expr)?;
+                let dest_reg = self.allocate_register()?;
 
                 match operator.get_token_type() {
                     TokenType::Minus => match operand_type {
-                        Type::Integer => self.emit(OpCode::UnaryNegateInt, vec![], span),
-                        Type::Float => self.emit(OpCode::UnaryNegateFloat, vec![], span),
+                        Type::Integer => {
+                            self.emit(
+                                OpCode::NegateInt,
+                                vec![dest_reg as usize, src_reg as usize],
+                                span,
+                            );
+                        }
+                        Type::Float => {
+                            self.emit(
+                                OpCode::NegateFloat,
+                                vec![dest_reg as usize, src_reg as usize],
+                                span,
+                            );
+                        }
                         _ => {
                             self.throw_error(HydorError::TypeMismatch {
                                 expected: vec![Type::Integer, Type::Float],
@@ -239,9 +259,13 @@ impl Compiler {
                             return None;
                         }
                     },
-                    TokenType::Not => self.emit(OpCode::UnaryNot, vec![], span),
+                    TokenType::Not => {
+                        self.emit(OpCode::Not, vec![dest_reg as usize, src_reg as usize], span);
+                    }
                     _ => unreachable!("Unhandled unary operator type"),
                 };
+
+                Some(dest_reg)
             }
 
             Expr::BinaryOperation {
@@ -249,19 +273,10 @@ impl Compiler {
                 operator,
                 right,
             } => {
-                if self
-                    .try_fold_binary(&left, &right, &operator, expr.span)
-                    .is_some()
-                {
-                    return Some(());
-                }
-
                 let left_type = self.get_expr_type(&left)?;
                 let right_type = self.get_expr_type(&right)?;
 
-                self.compile_binary_expr(
-                    left_type, *left, right_type, *right, operator, expr.span,
-                )?;
+                self.compile_binary_expr(left_type, *left, right_type, *right, operator, span)
             }
 
             unknown => {
@@ -269,11 +284,78 @@ impl Compiler {
                     node: unknown.to_node(),
                     span,
                 });
-                return None;
+                None
             }
         }
+    }
 
-        Some(())
+    pub(crate) fn compile_binary_expr(
+        &mut self,
+        left_type: Type,
+        left: Expression,
+        _right_type: Type,
+        right: Expression,
+        operator: crate::tokens::Token,
+        span: Span,
+    ) -> Option<u8> {
+        let left_reg = self.compile_expression(left)?;
+        let right_reg = self.compile_expression(right)?;
+        let dest_reg = self.allocate_register()?;
+
+        let op_type = operator.get_token_type();
+
+        // Choose correct opcode based on operator and type
+        let opcode = match (op_type, &left_type) {
+            // Integer arithmetic
+            (TokenType::Plus, Type::Integer) => OpCode::AddInt,
+            (TokenType::Minus, Type::Integer) => OpCode::SubtractInt,
+            (TokenType::Asterisk, Type::Integer) => OpCode::MultiplyInt,
+            (TokenType::Slash, Type::Integer) => OpCode::DivideInt,
+            (TokenType::Caret, Type::Integer) => OpCode::ExponentInt,
+
+            // Float arithmetic
+            (TokenType::Plus, Type::Float) => OpCode::AddFloat,
+            (TokenType::Minus, Type::Float) => OpCode::SubtractFloat,
+            (TokenType::Asterisk, Type::Float) => OpCode::MultiplyFloat,
+            (TokenType::Slash, Type::Float) => OpCode::DivideFloat,
+            (TokenType::Caret, Type::Float) => OpCode::ExponentFloat,
+
+            // Integer comparisons
+            (TokenType::LessThan, Type::Integer) => OpCode::LessInt,
+            (TokenType::LessThanEqual, Type::Integer) => OpCode::LessEqualInt,
+            (TokenType::GreaterThan, Type::Integer) => OpCode::GreaterInt,
+            (TokenType::GreaterThanEqual, Type::Integer) => OpCode::GreaterEqualInt,
+
+            // Float comparisons
+            (TokenType::LessThan, Type::Float) => OpCode::LessFloat,
+            (TokenType::LessThanEqual, Type::Float) => OpCode::LessEqualFloat,
+            (TokenType::GreaterThan, Type::Float) => OpCode::GreaterFloat,
+            (TokenType::GreaterThanEqual, Type::Float) => OpCode::GreaterEqualFloat,
+
+            // Equality (works on any type)
+            (TokenType::Equal, _) => OpCode::Equal,
+            (TokenType::NotEqual, _) => OpCode::NotEqual,
+
+            // String concatenation
+            (TokenType::Plus, Type::String) => OpCode::ConcatString,
+
+            _ => {
+                self.throw_error(HydorError::TypeMismatch {
+                    expected: vec![Type::Integer, Type::Float],
+                    found: left_type,
+                    span,
+                });
+                return None;
+            }
+        };
+
+        self.emit(
+            opcode,
+            vec![dest_reg as usize, left_reg as usize, right_reg as usize],
+            span,
+        );
+
+        Some(dest_reg)
     }
 
     pub(crate) fn get_expr_type(&mut self, expr: &Expression) -> Option<Type> {
@@ -289,24 +371,16 @@ impl Compiler {
                     Ok(s) => Some(s.symbol_type.clone()),
                     Err(he) => {
                         self.throw_error(he);
-                        return None;
+                        None
                     }
                 }
             }
 
-            Expr::Unary { right, operator } => {
-                match operator.get_token_type() {
-                    TokenType::Minus => {
-                        // -x is Integer if x is Integer
-                        self.get_expr_type(right)
-                    }
-                    TokenType::Not => {
-                        // !x is always Bool
-                        Some(Type::Bool)
-                    }
-                    _ => unreachable!(),
-                }
-            }
+            Expr::Unary { right, operator } => match operator.get_token_type() {
+                TokenType::Minus => self.get_expr_type(right),
+                TokenType::Not => Some(Type::Bool),
+                _ => unreachable!(),
+            },
 
             Expr::BinaryOperation { left, operator, .. } => match operator.get_token_type() {
                 TokenType::Plus
@@ -329,19 +403,30 @@ impl Compiler {
         }
     }
 
+    fn allocate_register(&mut self) -> Option<u8> {
+        if self.next_register >= u8::MAX {
+            self.throw_error(HydorError::RegisterOverflow {
+                span: Span::default(),
+            });
+            return None;
+        }
+
+        let reg = self.next_register;
+        self.next_register += 1;
+        Some(reg)
+    }
+
     /// Add a string to the string table (with deduplication)
     pub(crate) fn intern_string(&mut self, s: String) -> usize {
-        // Check if we already have this string
         if let Some(pos) = self.string_table.iter().position(|existing| existing == &s) {
             return pos;
         }
 
-        // New string, add it
         self.string_table.push(s);
         self.string_table.len() - 1
     }
 
-    pub(crate) fn get_intern_string(&mut self, idx: usize) -> String {
+    pub(crate) fn get_intern_string(&self, idx: usize) -> String {
         self.string_table[idx].clone()
     }
 
@@ -351,30 +436,7 @@ impl Compiler {
             constants: mem::take(&mut self.constants),
             string_table: mem::take(&mut self.string_table),
             debug_info: mem::take(&mut self.debug_info),
-            global_count: self.global_count,
         }
-    }
-
-    pub(crate) fn extract_constant_value(&mut self, expr: &Expression) -> Option<RuntimeValue> {
-        match &expr.node {
-            Expr::IntegerLiteral(value) => Some(RuntimeValue::IntegerLiteral(*value)),
-            Expr::FloatLiteral(value) => Some(RuntimeValue::FloatLiteral(*value)),
-            Expr::StringLiteral(value) => {
-                let intern_idx = self.intern_string(value.to_string());
-                Some(RuntimeValue::StringLiteral(intern_idx))
-            }
-            Expr::BooleanLiteral(value) => Some(RuntimeValue::BooleanLiteral(*value)),
-            Expr::NilLiteral => Some(RuntimeValue::NilLiteral),
-            // Return None for non-constant expressions (identifiers, binary ops, etc.)
-            _ => None,
-        }
-    }
-
-    /// Emit an instruction with span tracking
-    pub(crate) fn emit(&mut self, opcode: OpCode, operands: Vec<usize>, span: Span) -> usize {
-        let instruction = OpCode::make(opcode, operands);
-        let position = self.add_instruction(instruction, span);
-        position
     }
 
     /// Add a constant to the constants table
@@ -394,6 +456,13 @@ impl Compiler {
     /// Record a compilation error
     pub(crate) fn throw_error(&mut self, error: HydorError) {
         self.errors.add(error);
+    }
+
+    /// Emit an instruction with span tracking
+    pub(crate) fn emit(&mut self, opcode: OpCode, operands: Vec<usize>, span: Span) -> usize {
+        let instruction = OpCode::make(opcode, operands);
+        let position = self.add_instruction(instruction, span);
+        position
     }
 
     /// Add instruction bytes and track their span

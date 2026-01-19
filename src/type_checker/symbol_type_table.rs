@@ -7,8 +7,8 @@ use crate::{
 };
 
 pub struct SymbolType {
-    symbol_type: Type,
-    span: Span,
+    pub symbol_type: Type,
+    pub span: Span,
 }
 
 pub struct SymbolTypeTable {
@@ -40,7 +40,7 @@ impl SymbolTypeTable {
 
         let symbol_type = SymbolType {
             symbol_type: t,
-            span: span,
+            span,
         };
 
         self.store.insert(ident, symbol_type);

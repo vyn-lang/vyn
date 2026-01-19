@@ -62,6 +62,13 @@ pub enum HydorError {
     },
 
     // ----- Compiler -----
+    RegisterOverflow {
+        span: Span,
+    },
+    NotImplemented {
+        feature: String,
+        span: Span,
+    },
     UnknownAST {
         node: Node,
         span: Span,
@@ -113,6 +120,8 @@ impl HydorError {
             HydorError::KeywordTypeError { span, .. } => *span,
             HydorError::InvalidTypeName { span, .. } => *span,
             HydorError::ExpectedType { span, .. } => *span,
+            HydorError::RegisterOverflow { span, .. } => *span,
+            HydorError::NotImplemented { span, .. } => *span,
 
             HydorError::TypeMismatch { span, .. } => *span,
             HydorError::InvalidUnaryOp { span, .. } => *span,
@@ -142,6 +151,8 @@ impl HydorError {
             HydorError::KeywordTypeError { .. } => "Syntax",
             HydorError::InvalidTypeName { .. } => "Syntax",
             HydorError::ExpectedType { .. } => "Syntax",
+            HydorError::RegisterOverflow { .. } => "Compiler",
+            HydorError::NotImplemented { .. } => "Compiler",
 
             HydorError::TypeMismatch { .. } => "Type",
             HydorError::InvalidUnaryOp { .. } => "Type",
@@ -172,6 +183,12 @@ impl HydorError {
             }
             HydorError::KeywordTypeError { got, .. } => {
                 format!("'{}' is a keyword and cannot be used as a type name", got)
+            }
+            HydorError::RegisterOverflow { .. } => {
+                "Register overflow: expression is too complex".to_string()
+            }
+            HydorError::NotImplemented { feature, .. } => {
+                format!("Feature not yet implemented: {}", feature)
             }
             HydorError::InvalidTypeName { got, .. } => {
                 format!("'{}' is not a valid type", got)
@@ -340,6 +357,12 @@ impl HydorError {
             HydorError::ExpectedType { got, .. } => Some(format!(
                 "Insert a valid type before '{got}' based on the assigned value"
             )),
+            HydorError::RegisterOverflow { .. } => {
+                Some("Split this expression into multiple smaller expressions or statements".to_string())
+            }
+            HydorError::NotImplemented { feature, .. } => {
+                Some(format!("'{}' is planned but not yet available in this version", feature))
+            }
             HydorError::InvalidTypeName { .. } => {
                 Some("Available types: Int, Float, Bool, String".to_string())
             }
