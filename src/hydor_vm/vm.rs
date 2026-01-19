@@ -5,6 +5,7 @@ use crate::{
 /*
  * TODO: Refactor VM
  * */
+
 // Singletons for common values
 const NIL: RuntimeValue = RuntimeValue::NilLiteral;
 const TRUE: RuntimeValue = RuntimeValue::BooleanLiteral(true);

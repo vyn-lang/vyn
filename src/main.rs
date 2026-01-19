@@ -1,8 +1,15 @@
-use hydor::{compiler::compiler::Compiler, lexer::Lexer, parser::parser::Parser};
+use std::time::Instant;
+
+use hydor::{
+    compiler::{compiler::Compiler, disassembler::disassemble},
+    hydor_vm::vm::HydorVM,
+    lexer::Lexer,
+    parser::parser::Parser,
+};
 
 fn main() {
     let source = r#"
-    10+10
+    (10+10)^2
         "#;
     let mut lexer = Lexer::new(source);
     let mut parser = Parser::new(lexer.tokenize());
@@ -17,7 +24,14 @@ fn main() {
 
             match result {
                 Ok(r) => {
-                    println!("{r:#?}");
+                    // disassemble(&r);
+                    let mut vm = HydorVM::new(r.instructions, r.constants, r.string_table);
+
+                    let start = Instant::now();
+                    vm.run();
+                    let dur = start.elapsed();
+
+                    println!("Program took {dur:?}");
                 }
                 Err(ec) => ec.report_all(source),
             }
