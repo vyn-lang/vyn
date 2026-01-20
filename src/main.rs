@@ -1,10 +1,10 @@
 use std::time::Instant;
 
-use hydor::{
+use vyn::{
     compiler::{compiler::Compiler, disassembler::disassemble},
-    hydor_vm::vm::HydorVM,
     lexer::Lexer,
     parser::parser::Parser,
+    vyn_vm::vm::VynVM,
 };
 
 fn main() {
@@ -27,7 +27,7 @@ fn main() {
             match result {
                 Ok(r) => {
                     disassemble(&r);
-                    let mut vm = HydorVM::new(r.instructions, r.constants, r.string_table);
+                    let mut vm = VynVM::new(r.instructions, r.constants, r.string_table);
 
                     let start = Instant::now();
                     vm.execute().unwrap();

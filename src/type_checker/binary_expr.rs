@@ -1,6 +1,6 @@
 use crate::{
     ast::ast::Expression,
-    errors::HydorError,
+    errors::VynError,
     tokens::{Token, TokenType},
     type_checker::type_checker::{Type, TypeChecker},
     utils::Span,
@@ -23,7 +23,7 @@ impl TypeChecker {
             // Arithmetic
             TokenType::Plus => {
                 if left_type != right_type {
-                    self.throw_error(HydorError::InvalidBinaryOp {
+                    self.throw_error(VynError::InvalidBinaryOp {
                         operator: op_tok,
                         left_type,
                         right_type,
@@ -40,7 +40,7 @@ impl TypeChecker {
                     return Ok(left_type);
                 }
 
-                self.throw_error(HydorError::InvalidBinaryOp {
+                self.throw_error(VynError::InvalidBinaryOp {
                     operator: op_tok,
                     left_type,
                     right_type,
@@ -65,7 +65,7 @@ impl TypeChecker {
             // Equality
             TokenType::Equal | TokenType::NotEqual => {
                 if left_type != right_type {
-                    self.throw_error(HydorError::InvalidBinaryOp {
+                    self.throw_error(VynError::InvalidBinaryOp {
                         operator: op_tok,
                         left_type,
                         right_type,
@@ -89,7 +89,7 @@ impl TypeChecker {
         span: Span,
     ) -> Result<Type, ()> {
         if left != right {
-            self.throw_error(HydorError::InvalidBinaryOp {
+            self.throw_error(VynError::InvalidBinaryOp {
                 operator: op,
                 left_type: left,
                 right_type: right,
@@ -99,7 +99,7 @@ impl TypeChecker {
         }
 
         if left != Type::Integer && left != Type::Float {
-            self.throw_error(HydorError::InvalidBinaryOp {
+           self.throw_error(VynError::InvalidBinaryOp {
                 operator: op,
                 left_type: left.clone(),
                 right_type: right,

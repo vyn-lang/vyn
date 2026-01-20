@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
-    errors::{ErrorCollector, HydorError},
+    errors::{ErrorCollector, VynError},
     parser::lookups::Precedence,
     tokens::{Token, TokenInfo, TokenType},
     utils::{Span, Spanned},
@@ -124,7 +124,7 @@ impl Parser {
 
     pub(crate) fn expect(&mut self, token_type: TokenType) -> bool {
         if self.current_token().token.get_token_type() != token_type {
-            self.errors.add(HydorError::ExpectedToken {
+            self.errors.add(VynError::ExpectedToken {
                 expected: token_type,
                 got: self.current_token().token.get_token_type(),
                 span: self.current_token().span,
@@ -156,7 +156,7 @@ impl Parser {
             }
 
             _ => {
-                self.errors.add(HydorError::ExpectedToken {
+                self.errors.add(VynError::ExpectedToken {
                     expected: TokenType::Semicolon,
                     got: current,
                     span: self.current_token().span,
@@ -203,7 +203,7 @@ impl Parser {
         let prefix_fn = match self.nud_parse_fns.get(&token_type) {
             Some(f) => *f,
             None => {
-                self.errors.add(HydorError::UnexpectedToken {
+                self.errors.add(VynError::UnexpectedToken {
                     token: token_type,
                     span: self.current_token().span,
                 });
@@ -472,7 +472,7 @@ impl Parser {
 
         // No synchronize calls needed anywhere!
         if self.current_token().token.get_token_type() != TokenType::Identifier {
-            self.errors.add(HydorError::ExpectedToken {
+            self.errors.add(VynError::ExpectedToken {
                 expected: TokenType::Identifier,
                 got: self.current_token().token.get_token_type(),
                 span: self.current_token().span,

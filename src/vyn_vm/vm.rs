@@ -1,6 +1,6 @@
 use crate::{
-    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16},
-    errors::HydorError,
+    bytecode::bytecode::{Instructions, OpCode, ToOpcode},
+    errors::VynError,
     runtime_value::RuntimeValue,
 };
 /*
@@ -15,7 +15,7 @@ pub const FALSE: RuntimeValue = RuntimeValue::BooleanLiteral(false);
 const MAX_REGISTERS: usize = 256;
 type Registers = [RuntimeValue; MAX_REGISTERS];
 
-pub struct HydorVM {
+pub struct VynVM {
     // Registers store actual RuntimeValues
     pub(crate) registers: Registers,
     // Constant pool
@@ -28,7 +28,7 @@ pub struct HydorVM {
     pub(crate) ip: usize,
 }
 
-impl HydorVM {
+impl VynVM {
     pub fn new(
         instructions: Instructions,
         constants: Vec<RuntimeValue>,
@@ -43,7 +43,7 @@ impl HydorVM {
         }
     }
 
-    pub fn execute(&mut self) -> Result<(), HydorError> {
+    pub fn execute(&mut self) -> Result<(), VynError> {
         loop {
             let opcode = self.instructions[self.ip];
 

@@ -5,7 +5,7 @@ use crate::{
 use colored::*;
 
 #[derive(Debug, Clone)]
-pub enum HydorError {
+pub enum VynError {
     // ----- Parser -----
     UnexpectedToken {
         token: TokenType,
@@ -112,97 +112,97 @@ pub enum HydorError {
     },
 }
 
-impl HydorError {
+impl VynError {
     pub fn span(&self) -> Span {
         match self {
-            HydorError::UnexpectedToken { span, .. } => *span,
-            HydorError::ExpectedToken { span, .. } => *span,
-            HydorError::KeywordTypeError { span, .. } => *span,
-            HydorError::InvalidTypeName { span, .. } => *span,
-            HydorError::ExpectedType { span, .. } => *span,
-            HydorError::RegisterOverflow { span, .. } => *span,
-            HydorError::NotImplemented { span, .. } => *span,
+            VynError::UnexpectedToken { span, .. } => *span,
+            VynError::ExpectedToken { span, .. } => *span,
+            VynError::KeywordTypeError { span, .. } => *span,
+            VynError::InvalidTypeName { span, .. } => *span,
+            VynError::ExpectedType { span, .. } => *span,
+            VynError::RegisterOverflow { span, .. } => *span,
+            VynError::NotImplemented { span, .. } => *span,
 
-            HydorError::TypeMismatch { span, .. } => *span,
-            HydorError::InvalidUnaryOp { span, .. } => *span,
-            HydorError::InvalidBinaryOp { span, .. } => *span,
-            HydorError::DeclarationTypeMismatch { span, .. } => *span,
-            HydorError::UndefinedVariable { span, .. } => *span,
-            HydorError::VariableRedeclaration {
+            VynError::TypeMismatch { span, .. } => *span,
+            VynError::InvalidUnaryOp { span, .. } => *span,
+            VynError::InvalidBinaryOp { span, .. } => *span,
+            VynError::DeclarationTypeMismatch { span, .. } => *span,
+            VynError::UndefinedVariable { span, .. } => *span,
+            VynError::VariableRedeclaration {
                 redeclaration_span, ..
             } => *redeclaration_span,
 
-            HydorError::UnknownAST { span, .. } => *span,
-            HydorError::UndefinedIdentifier { span, .. } => *span,
+            VynError::UnknownAST { span, .. } => *span,
+            VynError::UndefinedIdentifier { span, .. } => *span,
 
-            HydorError::OperandStackUnderflow { span, .. } => *span,
-            HydorError::OperandStackOverflow { span, .. } => *span,
-            HydorError::GlobalStackOverflow { span, .. } => *span,
-            HydorError::ArithmeticError { span, .. } => *span,
-            HydorError::UnaryOperationError { span, .. } => *span,
-            HydorError::ComparisonOperationError { span, .. } => *span,
+            VynError::OperandStackUnderflow { span, .. } => *span,
+            VynError::OperandStackOverflow { span, .. } => *span,
+            VynError::GlobalStackOverflow { span, .. } => *span,
+            VynError::ArithmeticError { span, .. } => *span,
+            VynError::UnaryOperationError { span, .. } => *span,
+            VynError::ComparisonOperationError { span, .. } => *span,
         }
     }
 
     pub fn category(&self) -> &str {
         match self {
-            HydorError::UnexpectedToken { .. } => "Syntax",
-            HydorError::ExpectedToken { .. } => "Syntax",
-            HydorError::KeywordTypeError { .. } => "Syntax",
-            HydorError::InvalidTypeName { .. } => "Syntax",
-            HydorError::ExpectedType { .. } => "Syntax",
-            HydorError::RegisterOverflow { .. } => "Compiler",
-            HydorError::NotImplemented { .. } => "Compiler",
+            VynError::UnexpectedToken { .. } => "Syntax",
+            VynError::ExpectedToken { .. } => "Syntax",
+            VynError::KeywordTypeError { .. } => "Syntax",
+            VynError::InvalidTypeName { .. } => "Syntax",
+            VynError::ExpectedType { .. } => "Syntax",
+            VynError::RegisterOverflow { .. } => "Compiler",
+            VynError::NotImplemented { .. } => "Compiler",
 
-            HydorError::TypeMismatch { .. } => "Type",
-            HydorError::InvalidUnaryOp { .. } => "Type",
-            HydorError::InvalidBinaryOp { .. } => "Type",
-            HydorError::DeclarationTypeMismatch { .. } => "Type",
-            HydorError::UndefinedVariable { .. } => "Type",
-            HydorError::VariableRedeclaration { .. } => "Type",
+            VynError::TypeMismatch { .. } => "Type",
+            VynError::InvalidUnaryOp { .. } => "Type",
+            VynError::InvalidBinaryOp { .. } => "Type",
+            VynError::DeclarationTypeMismatch { .. } => "Type",
+            VynError::UndefinedVariable { .. } => "Type",
+            VynError::VariableRedeclaration { .. } => "Type",
 
-            HydorError::UnknownAST { .. } => "Compiler",
-            HydorError::UndefinedIdentifier { .. } => "Compiler",
+            VynError::UnknownAST { .. } => "Compiler",
+            VynError::UndefinedIdentifier { .. } => "Compiler",
 
-            HydorError::OperandStackUnderflow { .. } => "Runtime",
-            HydorError::OperandStackOverflow { .. } => "Runtime",
-            HydorError::GlobalStackOverflow { .. } => "Runtime",
-            HydorError::ArithmeticError { .. } => "Runtime",
-            HydorError::UnaryOperationError { .. } => "Runtime",
-            HydorError::ComparisonOperationError { .. } => "Runtime",
+            VynError::OperandStackUnderflow { .. } => "Runtime",
+            VynError::OperandStackOverflow { .. } => "Runtime",
+            VynError::GlobalStackOverflow { .. } => "Runtime",
+            VynError::ArithmeticError { .. } => "Runtime",
+            VynError::UnaryOperationError { .. } => "Runtime",
+            VynError::ComparisonOperationError { .. } => "Runtime",
         }
     }
 
     pub fn message(&self) -> String {
         match self {
-            HydorError::UnexpectedToken { token, .. } => {
+            VynError::UnexpectedToken { token, .. } => {
                 format!("Unexpected token '{}'", token)
             }
-            HydorError::ExpectedToken { expected, got, .. } => {
+            VynError::ExpectedToken { expected, got, .. } => {
                 format!("Expected '{}' but found '{}'", expected, got)
             }
-            HydorError::KeywordTypeError { got, .. } => {
+            VynError::KeywordTypeError { got, .. } => {
                 format!("'{}' is a keyword and cannot be used as a type name", got)
             }
-            HydorError::RegisterOverflow { .. } => {
+            VynError::RegisterOverflow { .. } => {
                 "Register overflow: expression is too complex".to_string()
             }
-            HydorError::NotImplemented { feature, .. } => {
+            VynError::NotImplemented { feature, .. } => {
                 format!("Feature not yet implemented: {}", feature)
             }
-            HydorError::InvalidTypeName { got, .. } => {
+            VynError::InvalidTypeName { got, .. } => {
                 format!("'{}' is not a valid type", got)
             }
-            HydorError::ExpectedType { got, .. } => {
+            VynError::ExpectedType { got, .. } => {
                 format!("Expected type annotation, got '{got}' instead")
             }
-            HydorError::DeclarationTypeMismatch { got, expected, .. } => {
+            VynError::DeclarationTypeMismatch { got, expected, .. } => {
                 format!(
                     "Type mismatch in variable declaration: expected '{}', got '{}'",
                     expected, got
                 )
             }
-            HydorError::TypeMismatch {
+            VynError::TypeMismatch {
                 expected, found, ..
             } => {
                 if expected.len() > 1 {
@@ -220,7 +220,7 @@ impl HydorError {
                     format!("Type mismatch: expected '{}', got '{}'", expected[0], found)
                 }
             }
-            HydorError::InvalidUnaryOp {
+            VynError::InvalidUnaryOp {
                 operator,
                 operand_type,
                 ..
@@ -230,7 +230,7 @@ impl HydorError {
                     operator, operand_type
                 )
             }
-            HydorError::InvalidBinaryOp {
+            VynError::InvalidBinaryOp {
                 operator,
                 left_type,
                 right_type,
@@ -248,10 +248,10 @@ impl HydorError {
                     )
                 }
             }
-            HydorError::UndefinedVariable { name, .. } => {
+            VynError::UndefinedVariable { name, .. } => {
                 format!("Undefined variable '{}'", name)
             }
-            HydorError::VariableRedeclaration {
+            VynError::VariableRedeclaration {
                 name,
                 original_span,
                 ..
@@ -262,7 +262,7 @@ impl HydorError {
                 )
             }
 
-            HydorError::UnknownAST { node, .. } => match node {
+            VynError::UnknownAST { node, .. } => match node {
                 Node::Statement(s) => {
                     format!("Unimplemented statement:\n\n{:#?}", s)
                 }
@@ -270,28 +270,28 @@ impl HydorError {
                     format!("Unimplemented expression:\n\n{:#?}", e)
                 }
             },
-            HydorError::UndefinedIdentifier { ident_name, .. } => {
+            VynError::UndefinedIdentifier { ident_name, .. } => {
                 format!(
                     "Internal compiler error: undefined identifier '{}' escaped type checking",
                     ident_name
                 )
             }
 
-            HydorError::OperandStackUnderflow { stack_length, .. } => {
+            VynError::OperandStackUnderflow { stack_length, .. } => {
                 format!(
                     "Operand stack underflow: attempted to pop from stack with {} elements",
                     stack_length
                 )
             }
 
-            HydorError::OperandStackOverflow { stack_length, .. } => {
+            VynError::OperandStackOverflow { stack_length, .. } => {
                 format!(
                     "Operand stack overflow: expression stack exceeded maximum size (current size: {})",
                     stack_length
                 )
             }
 
-            HydorError::GlobalStackOverflow {
+            VynError::GlobalStackOverflow {
                 stack_length, max, ..
             } => {
                 format!(
@@ -300,7 +300,7 @@ impl HydorError {
                 )
             }
 
-            HydorError::ArithmeticError {
+            VynError::ArithmeticError {
                 operation,
                 left_type,
                 right_type,
@@ -319,7 +319,7 @@ impl HydorError {
                 }
             }
 
-            HydorError::UnaryOperationError {
+            VynError::UnaryOperationError {
                 operation,
                 operand_type,
                 ..
@@ -330,7 +330,7 @@ impl HydorError {
                 )
             }
 
-            HydorError::ComparisonOperationError {
+            VynError::ComparisonOperationError {
                 operation,
                 blame_type,
                 ..
@@ -345,46 +345,46 @@ impl HydorError {
 
     pub fn hint(&self) -> Option<String> {
         match self {
-            HydorError::UnexpectedToken { .. } => {
+            VynError::UnexpectedToken { .. } => {
                 Some("Remove this token or check for missing syntax".to_string())
             }
-            HydorError::ExpectedToken { expected, .. } => {
+            VynError::ExpectedToken { expected, .. } => {
                 Some(format!("Insert '{}' at this location", expected))
             }
-            HydorError::KeywordTypeError { .. } => {
+            VynError::KeywordTypeError { .. } => {
                 Some("Keywords are reserved and cannot be used as type names".to_string())
             }
-            HydorError::ExpectedType { got, .. } => Some(format!(
+            VynError::ExpectedType { got, .. } => Some(format!(
                 "Insert a valid type before '{got}' based on the assigned value"
             )),
-            HydorError::RegisterOverflow { .. } => {
+            VynError::RegisterOverflow { .. } => {
                 Some("Split this expression into multiple smaller expressions or statements".to_string())
             }
-            HydorError::NotImplemented { feature, .. } => {
+            VynError::NotImplemented { feature, .. } => {
                 Some(format!("'{}' is planned but not yet available in this version", feature))
             }
-            HydorError::InvalidTypeName { .. } => {
+            VynError::InvalidTypeName { .. } => {
                 Some("Available types: Int, Float, Bool, String".to_string())
             }
-            HydorError::DeclarationTypeMismatch { got, expected, .. } => Some(format!(
+            VynError::DeclarationTypeMismatch { got, expected, .. } => Some(format!(
                 "Either change the declared type to '{}' or provide a value of type '{}'",
                 got, expected
             )),
-            HydorError::TypeMismatch { expected, .. } => {
+            VynError::TypeMismatch { expected, .. } => {
                 if expected.len() > 1 {
                     Some("Ensure the value matches one of the expected types".to_string())
                 } else {
                     Some(format!("Convert the value to type '{}'", expected[0]))
                 }
             }
-            HydorError::InvalidUnaryOp { operator, .. } => match operator {
+            VynError::InvalidUnaryOp { operator, .. } => match operator {
                 TokenType::Not => Some("Logical negation requires a boolean operand".to_string()),
                 TokenType::Minus => {
                     Some("Numeric negation requires an integer or float operand".to_string())
                 }
                 _ => Some("This operator is not supported for the given type".to_string()),
             },
-            HydorError::InvalidBinaryOp {
+            VynError::InvalidBinaryOp {
                 operator,
                 left_type,
                 right_type,
@@ -411,38 +411,38 @@ impl HydorError {
                     }
                 }
             }
-            HydorError::UndefinedVariable { name, .. } => {
+            VynError::UndefinedVariable { name, .. } => {
                 Some(format!("Declare the variable '{}' before using it", name))
             }
-            HydorError::VariableRedeclaration { name, .. } => Some(format!(
+            VynError::VariableRedeclaration { name, .. } => Some(format!(
                 "Remove this declaration or rename the variable to a different name than '{}'",
                 name
             )),
 
-            HydorError::UnknownAST { .. } => {
+            VynError::UnknownAST { .. } => {
                 Some("This is a compiler bug. Please report this issue".to_string())
             }
-            HydorError::UndefinedIdentifier { .. } => Some(
+            VynError::UndefinedIdentifier { .. } => Some(
                 "This is a compiler bug. The type checker should have caught this error"
                     .to_string(),
             ),
 
-            HydorError::OperandStackUnderflow { .. } => {
+            VynError::OperandStackUnderflow { .. } => {
                 Some("This is a virtual machine bug. Please report this issue".to_string())
             }
 
-            HydorError::OperandStackOverflow { .. } => {
+            VynError::OperandStackOverflow { .. } => {
                 Some("Reduce expression complexity or split expressions into smaller statements".to_string())
             }
 
-            HydorError::GlobalStackOverflow { .. } => {
+            VynError::GlobalStackOverflow { .. } => {
                 Some(
                     "Reduce the number of global variables, or move values into local scopes or functions"
                     .to_string(),
                 )
             }
 
-            HydorError::ArithmeticError {
+            VynError::ArithmeticError {
                 left_type,
                 right_type,
                 ..
@@ -460,7 +460,7 @@ impl HydorError {
                 }
             }
 
-            HydorError::UnaryOperationError { operation, .. } => match operation {
+            VynError::UnaryOperationError { operation, .. } => match operation {
                 TokenType::Minus => {
                     Some("Negation requires an integer or float operand".to_string())
                 }
@@ -468,7 +468,7 @@ impl HydorError {
                 _ => Some("This operation is not supported for the given type".to_string()),
             },
 
-            HydorError::ComparisonOperationError { .. } => {
+            VynError::ComparisonOperationError { .. } => {
                 Some("Comparison operators require integer or float operands".to_string())
             }
         }
@@ -570,7 +570,7 @@ impl HydorError {
 
     fn print_additional_context(&self, source: &str) {
         match self {
-            HydorError::VariableRedeclaration { original_span, .. } => {
+            VynError::VariableRedeclaration { original_span, .. } => {
                 eprintln!();
                 eprintln!("{}", "Originally declared here:".white().dimmed());
                 self.print_code_snippet(source, *original_span, false);
@@ -582,7 +582,7 @@ impl HydorError {
 
 #[derive(Debug, Default)]
 pub struct ErrorCollector {
-    errors: Vec<HydorError>,
+    errors: Vec<VynError>,
 }
 
 impl ErrorCollector {
@@ -590,7 +590,7 @@ impl ErrorCollector {
         Self { errors: Vec::new() }
     }
 
-    pub fn add(&mut self, error: HydorError) {
+    pub fn add(&mut self, error: VynError) {
         self.errors.push(error);
     }
 
@@ -623,7 +623,7 @@ impl ErrorCollector {
         }
     }
 
-    pub fn errors(&self) -> &[HydorError] {
+    pub fn errors(&self) -> &[VynError] {
         &self.errors
     }
 

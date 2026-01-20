@@ -4,7 +4,7 @@ use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
     bytecode::bytecode::{Instructions, OpCode},
     compiler::symbol_table::SymbolTable,
-    errors::{ErrorCollector, HydorError},
+    errors::{ErrorCollector, VynError},
     runtime_value::RuntimeValue,
     tokens::TokenType,
     type_checker::type_checker::{Type, TypeChecker},
@@ -154,7 +154,7 @@ impl Compiler {
             }
 
             unknown => {
-                self.throw_error(HydorError::UnknownAST {
+                self.throw_error(VynError::UnknownAST {
                     node: unknown.to_node(),
                     span,
                 });
@@ -254,7 +254,7 @@ impl Compiler {
                             );
                         }
                         _ => {
-                            self.throw_error(HydorError::TypeMismatch {
+                            self.throw_error(VynError::TypeMismatch {
                                 expected: vec![Type::Integer, Type::Float],
                                 found: operand_type,
                                 span,
@@ -283,7 +283,7 @@ impl Compiler {
             }
 
             unknown => {
-                self.throw_error(HydorError::UnknownAST {
+                self.throw_error(VynError::UnknownAST {
                     node: unknown.to_node(),
                     span,
                 });
@@ -343,7 +343,7 @@ impl Compiler {
             (TokenType::Plus, Type::String) => OpCode::ConcatString,
 
             _ => {
-                self.throw_error(HydorError::TypeMismatch {
+                self.throw_error(VynError::TypeMismatch {
                     expected: vec![Type::Integer, Type::Float],
                     found: left_type,
                     span,
@@ -417,7 +417,7 @@ impl Compiler {
 
         // Otherwise allocate a new one
         if self.next_register >= u8::MAX {
-            self.throw_error(HydorError::RegisterOverflow {
+            self.throw_error(VynError::RegisterOverflow {
                 span: Span::default(),
             });
             return None;
@@ -487,7 +487,7 @@ impl Compiler {
     }
 
     /// Record a compilation error
-    pub(crate) fn throw_error(&mut self, error: HydorError) {
+    pub(crate) fn throw_error(&mut self, error: VynError) {
         self.errors.add(error);
     }
 

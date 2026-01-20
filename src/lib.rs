@@ -1,12 +1,11 @@
 pub mod ast;
 pub mod bytecode;
-pub mod cli;
 pub mod compiler;
 pub mod errors;
-pub mod hydor_vm;
 pub mod lexer;
 pub mod parser;
 pub mod runtime_value;
 pub mod tokens;
 pub mod type_checker;
 pub mod utils;
+pub mod vyn_vm;

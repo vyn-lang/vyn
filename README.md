@@ -1,45 +1,54 @@
-# Hydor
+# Vyn
 
-A statically-typed, bytecode-compiled programming language.
+**Vyn** is a programming language that compiles to portable bytecode, allowing you to compile once and execute anywhere.
 
-## Overview
+## Why Vyn?
 
-Hydor is a programming language that compiles to portable bytecode, allowing you to compile once and execute anywhere.
-Currently in early development.
+- **Static Typing:** Type safety at compile time helps catch errors before runtime.
 
-## Features
+- **Portable Bytecode:** Compile to `.vync` bytecode files that run on any platform with the Vyn runtime.
 
-- **Static Typing** - Type safety at compile time
-- **Bytecode Compilation** - Compile to portable bytecode format
-- **Cross-platform Execution** - Run Hydor bytecode file (`.hydc`) on any platform with the runtime
+- **Simple & Clean:** Designed with clarity and ease of use in mind from the ground up.
 
 ## Current Status
 
-⚠️ **Early Development** - Hydor is currently in active development. Much more to come!
+⚠️ **Early Development** - Vyn is currently in active development. The language is taking shape and much more is on the way!
 
 ## Getting Started
 
-_Coming soon - Installation and usage instructions will be added as the language develops._
+_Installation and usage instructions will be added as the language develops._
+
+### Example
+
+```vyn
+// Coming soon - example Vyn code
+```
 
 ## Roadmap
 
-Future plans include:
+Plans for Vyn's development include:
 
 - Control flow structures (if/else, loops)
 - Functions and procedures
 - Standard library
 - More complete type system
-- Optimizations
-- Documentation and examples
+- Performance optimizations
+- Comprehensive documentation and examples
+
+## Building from Source
+
+_Coming soon_
 
 ## Contributing
 
-This project is in its early stages. Contributions, suggestions, and feedback are welcome as the language takes shape!
+This project is in its early stages. Contributions, suggestions, and feedback are welcome as the language takes shape! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-_License information to be added_
+Vyn is distributed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
-Built with ❤️ by caelondev
+<div align="center">
+  Built with ❤️ by <a href="https://github.com/caelondev">caelondev</a>
+</div>

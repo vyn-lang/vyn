@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    errors::{ErrorCollector, HydorError},
+    errors::{ErrorCollector, VynError},
     type_checker::type_checker::Type,
     utils::Span,
 };
@@ -30,7 +30,7 @@ impl SymbolTypeTable {
         errors: &mut ErrorCollector,
     ) -> Result<(), ()> {
         if let Some(existing) = self.store.get(&ident) {
-            errors.add(HydorError::VariableRedeclaration {
+            errors.add(VynError::VariableRedeclaration {
                 name: ident,
                 original_span: existing.span,
                 redeclaration_span: span,
@@ -56,7 +56,7 @@ impl SymbolTypeTable {
         match self.store.get(ident) {
             Some(s) => Ok(s.symbol_type.clone()),
             None => {
-                errors.add(HydorError::UndefinedVariable {
+                errors.add(VynError::UndefinedVariable {
                     name: ident.to_string(),
                     span,
                 });

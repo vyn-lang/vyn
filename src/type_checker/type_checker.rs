@@ -3,7 +3,7 @@ use crate::{
         ast::{Expr, Expression, Program, Statement, Stmt},
         type_annotation::TypeAnnotation,
     },
-    errors::{ErrorCollector, HydorError},
+    errors::{ErrorCollector, VynError},
     type_checker::symbol_type_table::SymbolTypeTable,
     utils::throw_error,
 };
@@ -94,7 +94,7 @@ impl TypeChecker {
 
                 // Check type match first
                 if an_type != value_type {
-                    self.throw_error(HydorError::DeclarationTypeMismatch {
+                    self.throw_error(VynError::DeclarationTypeMismatch {
                         expected: an_type.clone(),
                         got: value_type,
                         span: *span,
@@ -144,7 +144,7 @@ impl TypeChecker {
         }
     }
 
-    pub(crate) fn throw_error(&mut self, error: HydorError) {
+    pub(crate) fn throw_error(&mut self, error: VynError) {
         self.errors.add(error);
     }
 }

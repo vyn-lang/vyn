@@ -1,13 +1,13 @@
 use crate::{
     bytecode::bytecode::{read_uint8, read_uint16},
-    errors::HydorError,
-    hydor_vm::vm::HydorVM,
+    errors::VynError,
     runtime_value::RuntimeValue,
+    vyn_vm::vm::VynVM,
 };
 
-impl HydorVM {
+impl VynVM {
     #[inline(always)]
-    pub(crate) fn load_constant(&mut self) -> Result<(), HydorError> {
+    pub(crate) fn load_constant(&mut self) -> Result<(), VynError> {
         let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
         let const_idx = read_uint16(&self.instructions, self.ip + 2) as usize;
         self.ip += 3;
@@ -18,7 +18,7 @@ impl HydorVM {
     }
 
     #[inline(always)]
-    pub(crate) fn load_string(&mut self) -> Result<(), HydorError> {
+    pub(crate) fn load_string(&mut self) -> Result<(), VynError> {
         let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
         let str_idx = read_uint16(&self.instructions, self.ip + 2) as usize;
         self.ip += 3;
@@ -29,7 +29,7 @@ impl HydorVM {
     }
 
     #[inline(always)]
-    pub(crate) fn load_static(&mut self, static_val: RuntimeValue) -> Result<(), HydorError> {
+    pub(crate) fn load_static(&mut self, static_val: RuntimeValue) -> Result<(), VynError> {
         let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
         self.ip += 1;
 

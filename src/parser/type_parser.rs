@@ -1,5 +1,5 @@
 use crate::{
-    ast::type_annotation::TypeAnnotation, errors::HydorError, parser::parser::Parser,
+    ast::type_annotation::TypeAnnotation, errors::VynError, parser::parser::Parser,
     tokens::TokenType,
 };
 
@@ -10,7 +10,7 @@ impl Parser {
 
         // check if is identifier
         if current_token_type != TokenType::Identifier {
-            self.errors.add(HydorError::ExpectedType {
+            self.errors.add(VynError::ExpectedType {
                 got: current_token_type,
                 span: current_token.span,
             });
@@ -30,7 +30,7 @@ impl Parser {
                 Some(t)
             }
             None => {
-                self.errors.add(HydorError::InvalidTypeName {
+                self.errors.add(VynError::InvalidTypeName {
                     got: type_name.clone(),
                     span: current_token.span,
                 });

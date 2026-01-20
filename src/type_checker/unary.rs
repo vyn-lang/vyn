@@ -1,6 +1,6 @@
 use crate::{
     ast::ast::Expression,
-    errors::HydorError,
+    errors::VynError,
     tokens::{Token, TokenType},
     type_checker::type_checker::{Type, TypeChecker},
     utils::Span,
@@ -19,7 +19,7 @@ impl TypeChecker {
         match op_token {
             TokenType::Not => {
                 if right_type != Type::Bool {
-                    self.throw_error(HydorError::InvalidUnaryOp {
+                    self.throw_error(VynError::InvalidUnaryOp {
                         operator: op_token,
                         operand_type: right_type,
                         span,
@@ -31,7 +31,7 @@ impl TypeChecker {
 
             TokenType::Minus => {
                 if right_type != Type::Integer && right_type != Type::Float {
-                    self.throw_error(HydorError::InvalidUnaryOp {
+                    self.throw_error(VynError::InvalidUnaryOp {
                         operator: op_token,
                         operand_type: right_type,
                         span,

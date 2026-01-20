@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{errors::HydorError, type_checker::type_checker::Type, utils::Span};
+use crate::{errors::VynError, type_checker::type_checker::Type, utils::Span};
 
 pub struct Symbol {
     pub symbol_type: Type,
@@ -25,9 +25,9 @@ impl SymbolTable {
         span: Span,
         symbol_type: Type,
         register: u8,
-    ) -> Result<(), HydorError> {
+    ) -> Result<(), VynError> {
         if let Some(existing) = self.store.get(&ident) {
-            return Err(HydorError::VariableRedeclaration {
+            return Err(VynError::VariableRedeclaration {
                 name: ident,
                 original_span: existing.span,
                 redeclaration_span: span,
@@ -44,8 +44,8 @@ impl SymbolTable {
         Ok(())
     }
 
-    pub fn resolve_identifier(&self, ident: &str, span: Span) -> Result<&Symbol, HydorError> {
-        self.store.get(ident).ok_or(HydorError::UndefinedVariable {
+    pub fn resolve_identifier(&self, ident: &str, span: Span) -> Result<&Symbol, VynError> {
+        self.store.get(ident).ok_or(VynError::UndefinedVariable {
             name: ident.to_string(),
             span,
         })
@@ -71,4 +71,3 @@ impl SymbolTable {
         self.store.is_empty()
     }
 }
-

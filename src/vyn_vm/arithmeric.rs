@@ -1,13 +1,13 @@
 use crate::{
     bytecode::bytecode::{OpCode, read_uint8},
-    errors::HydorError,
-    hydor_vm::vm::HydorVM,
+    errors::VynError,
     runtime_value::RuntimeValue,
+    vyn_vm::vm::VynVM,
 };
 
-impl HydorVM {
+impl VynVM {
     #[inline]
-    pub(crate) fn arith_int(&mut self, operator: u8) -> Result<(), HydorError> {
+    pub(crate) fn arith_int(&mut self, operator: u8) -> Result<(), VynError> {
         let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
         let left_reg_idx = read_uint8(&self.instructions, self.ip + 2) as usize;
         let right_reg_idx = read_uint8(&self.instructions, self.ip + 3) as usize;
@@ -34,7 +34,7 @@ impl HydorVM {
     }
 
     #[inline]
-    pub(crate) fn arith_float(&mut self, operator: u8) -> Result<(), HydorError> {
+    pub(crate) fn arith_float(&mut self, operator: u8) -> Result<(), VynError> {
         let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
         let left_reg_idx = read_uint8(&self.instructions, self.ip + 2) as usize;
         let right_reg_idx = read_uint8(&self.instructions, self.ip + 3) as usize;
@@ -61,7 +61,7 @@ impl HydorVM {
     }
 
     #[inline]
-    pub(crate) fn concat_string(&mut self) -> Result<(), HydorError> {
+    pub(crate) fn concat_string(&mut self) -> Result<(), VynError> {
         let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
         let left_reg_idx = read_uint8(&self.instructions, self.ip + 2) as usize;
         let right_reg_idx = read_uint8(&self.instructions, self.ip + 3) as usize;

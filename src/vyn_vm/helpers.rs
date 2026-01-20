@@ -1,9 +1,9 @@
 use crate::{
-    hydor_vm::vm::{FALSE, HydorVM, TRUE},
     runtime_value::RuntimeValue,
+    vyn_vm::vm::{FALSE, TRUE, VynVM},
 };
 
-impl HydorVM {
+impl VynVM {
     pub(crate) fn is_truthy(&self, val: RuntimeValue) -> bool {
         match val {
             RuntimeValue::IntegerLiteral(n) => n != 0,
