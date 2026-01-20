@@ -1,7 +1,26 @@
+use std::collections::HashMap;
+
 use crate::{
-    ast::type_annotation::TypeAnnotation, errors::VynError, parser::parser::Parser,
+    ast::{
+        ast::{Expr, Expression},
+        type_annotation::TypeAnnotation,
+    },
+    errors::VynError,
+    parser::parser::Parser,
     tokens::TokenType,
 };
+
+pub struct TypeTable {
+    pub aliases: HashMap<String, TypeAnnotation>,
+}
+
+impl TypeTable {
+    pub fn new() -> Self {
+        Self {
+            aliases: HashMap::new(),
+        }
+    }
+}
 
 impl Parser {
     pub(crate) fn try_parse_type(&mut self) -> Option<TypeAnnotation> {
@@ -24,19 +43,32 @@ impl Parser {
             _ => unreachable!("Already checked it's an Identifier"),
         };
 
-        match TypeAnnotation::from_identifier(type_name) {
+        let type_annotation = match TypeAnnotation::from_identifier(type_name) {
             Some(t) => {
                 self.advance();
-                Some(t)
+                Some(t.clone())
             }
             None => {
-                self.errors.add(VynError::InvalidTypeName {
-                    got: type_name.clone(),
-                    span: current_token.span,
-                });
-                self.advance(); // consume bad token
-                None
+                let al_type = self.type_table.aliases.get(type_name)?.clone();
+                self.advance();
+                Some(al_type)
             }
-        }
+        };
+
+        type_annotation
+    }
+
+    pub fn enroll_type_alias(
+        &mut self,
+        ident: Expression,
+        aliased_type: TypeAnnotation,
+    ) -> Option<()> {
+        let name = match ident.node {
+            Expr::Identifier(s) => s,
+            _ => unreachable!(),
+        };
+
+        self.type_table.aliases.insert(name, aliased_type)?;
+        Some(())
     }
 }

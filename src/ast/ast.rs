@@ -51,6 +51,11 @@ pub enum Stmt {
         annotated_type: TypeAnnotation,
         span: Span,
     },
+    TypeAliasDeclaration {
+        identifier: Expression,
+        value: TypeAnnotation,
+        span: Span,
+    },
 }
 
 impl Expr {

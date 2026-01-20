@@ -60,6 +60,10 @@ pub enum VynError {
         original_span: Span,
         redeclaration_span: Span,
     },
+    TypeAliasRedeclaration {
+        name: String,
+        span: Span,
+    },
 
     // ----- Compiler -----
     RegisterOverflow {
@@ -131,6 +135,7 @@ impl VynError {
             VynError::VariableRedeclaration {
                 redeclaration_span, ..
             } => *redeclaration_span,
+            VynError::TypeAliasRedeclaration { span, .. } => *span,
 
             VynError::UnknownAST { span, .. } => *span,
             VynError::UndefinedIdentifier { span, .. } => *span,
@@ -160,6 +165,7 @@ impl VynError {
             VynError::DeclarationTypeMismatch { .. } => "Type",
             VynError::UndefinedVariable { .. } => "Type",
             VynError::VariableRedeclaration { .. } => "Type",
+            VynError::TypeAliasRedeclaration { .. } => "Type",
 
             VynError::UnknownAST { .. } => "Compiler",
             VynError::UndefinedIdentifier { .. } => "Compiler",
@@ -195,6 +201,12 @@ impl VynError {
             }
             VynError::ExpectedType { got, .. } => {
                 format!("Expected type annotation, got '{got}' instead")
+            }
+            VynError::TypeAliasRedeclaration { name, .. } => {
+                format!(
+                    "Cannot redeclare type alias '{}' in the current scope",
+                    name
+                )
             }
             VynError::DeclarationTypeMismatch { got, expected, .. } => {
                 format!(
@@ -376,6 +388,9 @@ impl VynError {
                 } else {
                     Some(format!("Convert the value to type '{}'", expected[0]))
                 }
+            }
+            VynError::TypeAliasRedeclaration { .. } => {
+                Some("Remove the redeclaration and use it".to_string())
             }
             VynError::InvalidUnaryOp { operator, .. } => match operator {
                 TokenType::Not => Some("Logical negation requires a boolean operand".to_string()),

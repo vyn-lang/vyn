@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::ast::{Expr, Expression, Program, Statement, Stmt},
+    ast::{
+        ast::{Expr, Expression, Program, Statement, Stmt},
+        type_annotation::TypeAnnotation,
+    },
     errors::{ErrorCollector, VynError},
-    parser::lookups::Precedence,
+    parser::{lookups::Precedence, type_parser::TypeTable},
     tokens::{Token, TokenInfo, TokenType},
     utils::{Span, Spanned},
 };
@@ -21,6 +24,9 @@ pub struct Parser {
     pub nud_parse_fns: HashMap<TokenType, PrefixParseFn>,
     pub stmt_parse_fns: HashMap<TokenType, StatementParseFn>,
 
+    // Where type aliases are stored
+    pub type_table: TypeTable,
+
     pub errors: ErrorCollector,
 }
 
@@ -31,6 +37,8 @@ impl Parser {
             current: 0,
             errors: ErrorCollector::new(),
             delimiter_stack: Vec::new(),
+
+            type_table: TypeTable::new(),
 
             led_parse_fns: HashMap::new(),
             nud_parse_fns: HashMap::new(),
@@ -63,6 +71,7 @@ impl Parser {
         parser.register_led(TokenType::NotEqual, Parser::parse_binary_expr);
 
         parser.register_stmt(TokenType::Let, Parser::parse_variable_decl);
+        parser.register_stmt(TokenType::Type, Parser::parse_type_alias_decl);
 
         parser
     }
@@ -469,8 +478,6 @@ impl Parser {
     pub fn parse_variable_decl(&mut self) -> Option<Statement> {
         let let_tok = self.current_token().clone();
         self.advance();
-
-        // No synchronize calls needed anywhere!
         if self.current_token().token.get_token_type() != TokenType::Identifier {
             self.errors.add(VynError::ExpectedToken {
                 expected: TokenType::Identifier,
@@ -479,8 +486,8 @@ impl Parser {
             });
             return None;
         }
-        let ident = self.parse_identifier_literal()?;
 
+        let ident = self.parse_identifier_literal()?;
         if !self.expect(TokenType::Colon) {
             return None;
         }
@@ -496,7 +503,6 @@ impl Parser {
         }
 
         let val_span = value.span.clone();
-
         Some(
             Stmt::VariableDeclaration {
                 identifier: ident,
@@ -510,5 +516,34 @@ impl Parser {
             }
             .spanned(let_tok.span),
         )
+    }
+
+    pub fn parse_type_alias_decl(&mut self) -> Option<Statement> {
+        let type_tok_info = self.current_token().clone();
+        self.advance(); // Eat Type Token
+
+        let ident = self.parse_identifier_literal()?;
+
+        if !self.expect(TokenType::Assign) {
+            return None;
+        }
+
+        let type_alias = self.try_parse_type()?;
+
+        if !self.expect_delimiter() {
+            return None;
+        }
+
+        let ident_span = ident.span;
+        self.enroll_type_alias(ident.clone(), type_alias.clone());
+
+        let stmt = Stmt::TypeAliasDeclaration {
+            identifier: ident,
+            value: type_alias,
+            span: ident_span,
+        }
+        .spanned(type_tok_info.span);
+
+        Some(stmt)
     }
 }

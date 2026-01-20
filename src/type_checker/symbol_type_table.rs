@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
+    ast::type_annotation::TypeAnnotation,
     errors::{ErrorCollector, VynError},
     type_checker::type_checker::Type,
     utils::Span,
@@ -13,12 +14,14 @@ pub struct SymbolType {
 
 pub struct SymbolTypeTable {
     store: HashMap<String, SymbolType>,
+    type_aliases: HashMap<String, Type>,
 }
 
 impl SymbolTypeTable {
     pub fn new() -> Self {
         Self {
             store: HashMap::new(),
+            type_aliases: HashMap::new(),
         }
     }
 
@@ -56,12 +59,33 @@ impl SymbolTypeTable {
         match self.store.get(ident) {
             Some(s) => Ok(s.symbol_type.clone()),
             None => {
-                errors.add(VynError::UndefinedVariable {
-                    name: ident.to_string(),
-                    span,
-                });
-                Err(())
+                // Check type alias instead
+                let al_type = self.type_aliases.get(ident);
+
+                if al_type.is_none() {
+                    errors.add(VynError::UndefinedVariable {
+                        name: ident.to_string(),
+                        span,
+                    });
+                    return Err(());
+                }
+
+                Ok(al_type.unwrap().clone())
             }
         }
+    }
+
+    pub fn enroll_type_alias(
+        &mut self,
+        name: String,
+        an_type: Type,
+        span: Span,
+    ) -> Result<(), VynError> {
+        if self.type_aliases.contains_key(&name) {
+            return Err(VynError::TypeAliasRedeclaration { name, span });
+        }
+
+        self.type_aliases.insert(name, an_type);
+        Ok(())
     }
 }

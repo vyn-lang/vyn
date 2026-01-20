@@ -114,6 +114,28 @@ impl TypeChecker {
                 Ok(())
             }
 
+            Stmt::TypeAliasDeclaration {
+                identifier,
+                value,
+                span,
+            } => {
+                let name = match identifier.node.clone() {
+                    Expr::Identifier(n) => n,
+                    _ => unreachable!("Type alias identifier must be caught by compiler"),
+                };
+
+                let result = self.symbol_type_table.enroll_type_alias(
+                    name,
+                    Type::from_anotated_type(value),
+                    span.clone(),
+                );
+
+                if result.is_err() {
+                    self.throw_error(result.err().unwrap());
+                }
+                Ok(())
+            }
+
             _ => throw_error(&format!("unknown ast: \n\n{:#?}", stmt.node), 1),
         }
     }

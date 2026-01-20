@@ -9,9 +9,8 @@ use vyn::{
 
 fn main() {
     let source = r#"
-    10==10
-    not "" != "hello"
-    "hello" == "hello"
+    type Name = String
+    let person: Name = "FooBar"
         "#;
     let mut lexer = Lexer::new(source);
     let mut parser = Parser::new(lexer.tokenize());

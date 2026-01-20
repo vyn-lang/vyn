@@ -132,6 +132,7 @@ impl Compiler {
                 let var_name = match identifier.node {
                     Expr::Identifier(n) => n,
                     _ => unreachable!("Variable name must be identifier"),
+                    // unreachable, the parser already checks this
                 };
 
                 let value_reg = self.compile_expression(value)?;
@@ -150,6 +151,12 @@ impl Compiler {
                     }
                 };
 
+                Some(())
+            }
+
+            Stmt::TypeAliasDeclaration { .. } => {
+                // Do nothing, this should only
+                // be used while type checking
                 Some(())
             }
 
@@ -185,10 +192,10 @@ impl Compiler {
                 Some(dest)
             }
 
-            Expr::BooleanLiteral(truethy) => {
+            Expr::BooleanLiteral(truthy) => {
                 let dest = self.allocate_register()?;
 
-                if truethy {
+                if truthy {
                     self.emit(OpCode::LoadTrue, vec![dest as usize], span);
                 } else {
                     self.emit(OpCode::LoadFalse, vec![dest as usize], span);
@@ -215,6 +222,9 @@ impl Compiler {
             }
 
             Expr::Identifier(name) => {
+                // This does a direct mapping
+                // it takes the value of the variable based on the
+                // register and returns that value
                 let symbol = match self.symbol_table.resolve_identifier(&name, span) {
                     Ok(s) => s,
                     Err(he) => {
@@ -223,7 +233,7 @@ impl Compiler {
                     }
                 };
 
-                // Just return the register where this variable lives
+                // Just return the register where the value of variable lives
                 Some(symbol.register)
             }
 
