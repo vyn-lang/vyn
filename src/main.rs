@@ -9,7 +9,9 @@ use hydor::{
 
 fn main() {
     let source = r#"
-    (10+10)^2
+    10==10
+    not "" != "hello"
+    "hello" == "hello"
         "#;
     let mut lexer = Lexer::new(source);
     let mut parser = Parser::new(lexer.tokenize());
@@ -24,12 +26,24 @@ fn main() {
 
             match result {
                 Ok(r) => {
-                    // disassemble(&r);
+                    disassemble(&r);
                     let mut vm = HydorVM::new(r.instructions, r.constants, r.string_table);
 
                     let start = Instant::now();
-                    vm.run();
+                    vm.execute().unwrap();
                     let dur = start.elapsed();
+
+                    println!(); // newline
+
+                    for (i, reg) in vm.get_registers().iter().enumerate() {
+                        if reg.is_string() {
+                            let str = vm.get_string(reg.as_string_index().unwrap());
+                            println!("r{i:?}: {str}");
+                            continue;
+                        }
+
+                        println!("r{i:?} {reg:?}");
+                    }
 
                     println!("Program took {dur:?}");
                 }

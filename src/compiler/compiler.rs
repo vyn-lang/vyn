@@ -1,4 +1,4 @@
-use std::mem;
+use std::{collections::HashSet, mem};
 
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
@@ -18,6 +18,8 @@ pub struct Compiler {
     debug_info: DebugInfo,
 
     next_register: u8,
+    free_registers: Vec<u8>, // TODO: These might need a seperate struct
+    pinned_registers: HashSet<u8>,
     symbol_table: SymbolTable,
     errors: ErrorCollector,
 }
@@ -78,6 +80,8 @@ impl Compiler {
             instructions: Vec::new(),
             constants: Vec::new(),
             string_table: Vec::new(),
+            free_registers: Vec::new(),
+            pinned_registers: HashSet::new(),
             debug_info: DebugInfo::new(),
             next_register: 0,
 
@@ -130,10 +134,9 @@ impl Compiler {
                     _ => unreachable!("Variable name must be identifier"),
                 };
 
-                // Compile the value expression into a register
                 let value_reg = self.compile_expression(value)?;
+                self.pin_register(value_reg);
 
-                // Store the variable -> register mapping
                 match self.symbol_table.declare_identifier(
                     var_name.clone(),
                     span,
@@ -355,6 +358,9 @@ impl Compiler {
             span,
         );
 
+        self.free_register(left_reg);
+        self.free_register(right_reg);
+
         Some(dest_reg)
     }
 
@@ -404,6 +410,12 @@ impl Compiler {
     }
 
     fn allocate_register(&mut self) -> Option<u8> {
+        // First, try to reuse a freed register
+        if let Some(reg) = self.free_registers.pop() {
+            return Some(reg);
+        }
+
+        // Otherwise allocate a new one
         if self.next_register >= u8::MAX {
             self.throw_error(HydorError::RegisterOverflow {
                 span: Span::default(),
@@ -414,6 +426,27 @@ impl Compiler {
         let reg = self.next_register;
         self.next_register += 1;
         Some(reg)
+    }
+
+    fn free_register(&mut self, reg: u8) {
+        if !self.pinned_registers.contains(&reg) {
+            self.free_registers.push(reg);
+        }
+    }
+
+    fn allocate_pinned_register(&mut self) -> Option<u8> {
+        let reg = self.allocate_register()?;
+        self.pin_register(reg);
+        Some(reg)
+    }
+
+    fn pin_register(&mut self, reg: u8) {
+        self.pinned_registers.insert(reg);
+    }
+
+    fn unpin_register(&mut self, reg: u8) {
+        self.pinned_registers.remove(&reg);
+        self.free_register(reg);
     }
 
     /// Add a string to the string table (with deduplication)

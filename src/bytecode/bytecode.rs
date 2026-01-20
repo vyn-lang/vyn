@@ -9,15 +9,15 @@ pub enum OpCode {
     Halt = 0x01,
 
     // Load operations
-    LoadConstInt = 0x03,   // LoadConstInt dest_reg, const_index
-    LoadConstFloat = 0x04, // LoadConstFloat dest_reg, const_index
-    LoadString = 0x05,     // LoadString dest_reg, string_index
-    LoadNil = 0x06,        // LoadNil dest_reg
-    LoadTrue = 0x07,       // LoadTrue dest_reg
-    LoadFalse = 0x08,      // LoadFalse dest_reg
+    LoadConstInt = 0x03,
+    LoadConstFloat = 0x04,
+    LoadString = 0x05,
+    LoadNil = 0x06,
+    LoadTrue = 0x07,
+    LoadFalse = 0x08,
 
     // Integer arithmetic
-    AddInt = 0x10, // AddInt dest_reg, left_reg, right_reg
+    AddInt = 0x10,
     SubtractInt = 0x11,
     MultiplyInt = 0x12,
     DivideInt = 0x13,
@@ -31,14 +31,14 @@ pub enum OpCode {
     ExponentFloat = 0x19,
 
     // String operations
-    ConcatString = 0x1A, // ConcatString dest_reg, left_reg, right_reg
+    ConcatString = 0x1A,
 
     // Unary operations
-    NegateInt = 0x20, // NegateInt dest_reg, src_reg
+    NegateInt = 0x20,
     NegateFloat = 0x21,
-    Not = 0x22, // Not dest_reg, src_reg
+    Not = 0x22,
 
-    // Integer comparisons (stores bool as 0 or 1)
+    // Integer comparisons
     LessInt = 0x30,
     LessEqualInt = 0x31,
     GreaterInt = 0x32,
@@ -51,15 +51,63 @@ pub enum OpCode {
     GreaterEqualFloat = 0x37,
 
     // General equality
-    Equal = 0x38, // Equal dest_reg, left_reg, right_reg
+    Equal = 0x38,
     NotEqual = 0x39,
 
     // Variable operations
-    StoreGlobal = 0x40, // StoreGlobal var_index, src_reg
-    LoadGlobal = 0x41,  // LoadGlobal dest_reg, var_index
+    StoreGlobal = 0x40,
+    LoadGlobal = 0x41,
 
     // Move operation
-    Move = 0x50, // Move dest_reg, src_reg
+    Move = 0x50,
+}
+
+impl OpCode {
+    // Opcode byte constants for fast VM dispatch
+    pub const HALT: u8 = 0x01;
+
+    pub const LOAD_CONST_INT: u8 = 0x03;
+    pub const LOAD_CONST_FLOAT: u8 = 0x04;
+    pub const LOAD_STRING: u8 = 0x05;
+    pub const LOAD_NIL: u8 = 0x06;
+    pub const LOAD_TRUE: u8 = 0x07;
+    pub const LOAD_FALSE: u8 = 0x08;
+
+    pub const ADD_INT: u8 = 0x10;
+    pub const SUBTRACT_INT: u8 = 0x11;
+    pub const MULTIPLY_INT: u8 = 0x12;
+    pub const DIVIDE_INT: u8 = 0x13;
+    pub const EXPONENT_INT: u8 = 0x14;
+
+    pub const ADD_FLOAT: u8 = 0x15;
+    pub const SUBTRACT_FLOAT: u8 = 0x16;
+    pub const MULTIPLY_FLOAT: u8 = 0x17;
+    pub const DIVIDE_FLOAT: u8 = 0x18;
+    pub const EXPONENT_FLOAT: u8 = 0x19;
+
+    pub const CONCAT_STRING: u8 = 0x1A;
+
+    pub const NEGATE_INT: u8 = 0x20;
+    pub const NEGATE_FLOAT: u8 = 0x21;
+    pub const NOT: u8 = 0x22;
+
+    pub const LESS_INT: u8 = 0x30;
+    pub const LESS_EQUAL_INT: u8 = 0x31;
+    pub const GREATER_INT: u8 = 0x32;
+    pub const GREATER_EQUAL_INT: u8 = 0x33;
+
+    pub const LESS_FLOAT: u8 = 0x34;
+    pub const LESS_EQUAL_FLOAT: u8 = 0x35;
+    pub const GREATER_FLOAT: u8 = 0x36;
+    pub const GREATER_EQUAL_FLOAT: u8 = 0x37;
+
+    pub const EQUAL: u8 = 0x38;
+    pub const NOT_EQUAL: u8 = 0x39;
+
+    pub const STORE_GLOBAL: u8 = 0x40;
+    pub const LOAD_GLOBAL: u8 = 0x41;
+
+    pub const MOVE: u8 = 0x50;
 }
 
 impl fmt::Display for OpCode {
@@ -94,15 +142,9 @@ pub type Instructions = Vec<u8>;
 
 impl OpCode {
     /// Create a new instruction with operands
-    ///
-    /// Format depends on instruction type:
-    /// - 3-register ops (Add, Sub, etc): [opcode, dest, left, right]
-    /// - 2-register ops (Negate, Not, Move): [opcode, dest, src]
-    /// - Load constant: [opcode, dest, const_index_hi, const_index_lo]
-    /// - Load immediate: [opcode, dest]
     pub fn make(opcode: OpCode, operands: Vec<usize>) -> Instructions {
         let definition = OpCode::get_definition(opcode);
-        let mut instruction_length = 1; // 1 for opcode
+        let mut instruction_length = 1;
 
         for width in definition.operands_width.iter() {
             instruction_length += width;
@@ -137,7 +179,7 @@ impl OpCode {
             // Load operations
             OpCode::LoadConstInt => Definition {
                 name: "LOAD_CONST_INT",
-                operands_width: vec![1, 2], // dest_reg (u8), const_index (u16)
+                operands_width: vec![1, 2],
             },
             OpCode::LoadConstFloat => Definition {
                 name: "LOAD_CONST_FLOAT",
@@ -149,7 +191,7 @@ impl OpCode {
             },
             OpCode::LoadNil => Definition {
                 name: "LOAD_NIL",
-                operands_width: vec![1], // dest_reg
+                operands_width: vec![1],
             },
             OpCode::LoadTrue => Definition {
                 name: "LOAD_TRUE",
@@ -160,7 +202,7 @@ impl OpCode {
                 operands_width: vec![1],
             },
 
-            // Integer arithmetic (3 registers: dest, left, right)
+            // Integer arithmetic
             OpCode::AddInt => Definition {
                 name: "ADD_INT",
                 operands_width: vec![1, 1, 1],
@@ -210,7 +252,7 @@ impl OpCode {
                 operands_width: vec![1, 1, 1],
             },
 
-            // Unary operations (2 registers: dest, src)
+            // Unary operations
             OpCode::NegateInt => Definition {
                 name: "NEGATE_INT",
                 operands_width: vec![1, 1],
@@ -273,17 +315,17 @@ impl OpCode {
             // Variable operations
             OpCode::StoreGlobal => Definition {
                 name: "STORE_GLOBAL",
-                operands_width: vec![2, 1], // var_index (u16), src_reg (u8)
+                operands_width: vec![2, 1],
             },
             OpCode::LoadGlobal => Definition {
                 name: "LOAD_GLOBAL",
-                operands_width: vec![1, 2], // dest_reg (u8), var_index (u16)
+                operands_width: vec![1, 2],
             },
 
             // Move
             OpCode::Move => Definition {
                 name: "MOVE",
-                operands_width: vec![1, 1], // dest_reg, src_reg
+                operands_width: vec![1, 1],
             },
         }
     }
@@ -303,61 +345,44 @@ impl ToOpcode for u8 {
             0x06 => OpCode::LoadNil,
             0x07 => OpCode::LoadTrue,
             0x08 => OpCode::LoadFalse,
-
-            // Integer arithmetic
             0x10 => OpCode::AddInt,
             0x11 => OpCode::SubtractInt,
             0x12 => OpCode::MultiplyInt,
             0x13 => OpCode::DivideInt,
             0x14 => OpCode::ExponentInt,
-
-            // Float arithmetic
             0x15 => OpCode::AddFloat,
             0x16 => OpCode::SubtractFloat,
             0x17 => OpCode::MultiplyFloat,
             0x18 => OpCode::DivideFloat,
             0x19 => OpCode::ExponentFloat,
-
-            // String operations
             0x1A => OpCode::ConcatString,
-
-            // Unary operations
             0x20 => OpCode::NegateInt,
             0x21 => OpCode::NegateFloat,
             0x22 => OpCode::Not,
-
-            // Integer comparisons
             0x30 => OpCode::LessInt,
             0x31 => OpCode::LessEqualInt,
             0x32 => OpCode::GreaterInt,
             0x33 => OpCode::GreaterEqualInt,
-
-            // Float comparisons
             0x34 => OpCode::LessFloat,
             0x35 => OpCode::LessEqualFloat,
             0x36 => OpCode::GreaterFloat,
             0x37 => OpCode::GreaterEqualFloat,
-
-            // General equality
             0x38 => OpCode::Equal,
             0x39 => OpCode::NotEqual,
-
-            // Variable operations
             0x40 => OpCode::StoreGlobal,
             0x41 => OpCode::LoadGlobal,
-
-            // Move
             0x50 => OpCode::Move,
-
             _ => unreachable!("Cannot convert byte '0x{:02X}' to an opcode", self),
         }
     }
 }
 
+#[inline]
 pub fn read_uint8(instructions: &Instructions, offset: usize) -> u8 {
     instructions[offset]
 }
 
+#[inline]
 pub fn read_uint16(instructions: &Instructions, offset: usize) -> u16 {
     BigEndian::read_u16(&instructions[offset..offset + 2])
 }

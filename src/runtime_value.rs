@@ -104,4 +104,8 @@ impl RuntimeValue {
     pub fn is_float(&self) -> bool {
         matches!(self, RuntimeValue::FloatLiteral(_))
     }
+
+    pub fn is_string(&self) -> bool {
+        matches!(self, RuntimeValue::StringLiteral(_))
+    }
 }
