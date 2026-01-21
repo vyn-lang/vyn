@@ -3,7 +3,7 @@ use std::{collections::HashSet, mem};
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
     bytecode::bytecode::{Instructions, OpCode},
-    compiler::symbol_table::SymbolTable,
+    compiler::{debug_info::DebugInfo, symbol_table::SymbolTable},
     errors::{ErrorCollector, VynError},
     runtime_value::RuntimeValue,
     tokens::TokenType,
@@ -30,48 +30,6 @@ pub struct Bytecode {
     pub constants: Vec<RuntimeValue>,
     pub string_table: Vec<String>,
     pub debug_info: DebugInfo,
-}
-
-/// Run-length encoded debug information
-#[derive(Default, Debug)]
-pub struct DebugInfo {
-    pub line_changes: Vec<(usize, u32)>,
-    pub start_col_changes: Vec<(usize, u32)>,
-    pub end_col_changes: Vec<(usize, u32)>,
-}
-
-impl DebugInfo {
-    pub fn new() -> Self {
-        Self {
-            line_changes: Vec::new(),
-            start_col_changes: Vec::new(),
-            end_col_changes: Vec::new(),
-        }
-    }
-
-    pub fn get_span(&self, ip: usize) -> Span {
-        let line = self.find_value(&self.line_changes, ip);
-        let start_column = self.find_value(&self.start_col_changes, ip);
-        let end_column = self.find_value(&self.end_col_changes, ip);
-
-        Span {
-            line,
-            start_column,
-            end_column,
-        }
-    }
-
-    fn find_value(&self, changes: &Vec<(usize, u32)>, ip: usize) -> u32 {
-        if changes.is_empty() {
-            return 0;
-        }
-
-        let idx = changes
-            .binary_search_by_key(&ip, |&(offset, _)| offset)
-            .unwrap_or_else(|i| i.saturating_sub(1));
-
-        changes[idx].1
-    }
 }
 
 impl Compiler {
@@ -240,46 +198,7 @@ impl Compiler {
             Expr::Unary {
                 ref operator,
                 ref right,
-            } => {
-                let right_expr = (**right).clone();
-                let operand_type = self.get_expr_type(right)?;
-
-                let src_reg = self.compile_expression(right_expr)?;
-                let dest_reg = self.allocate_register()?;
-
-                match operator.get_token_type() {
-                    TokenType::Minus => match operand_type {
-                        Type::Integer => {
-                            self.emit(
-                                OpCode::NegateInt,
-                                vec![dest_reg as usize, src_reg as usize],
-                                span,
-                            );
-                        }
-                        Type::Float => {
-                            self.emit(
-                                OpCode::NegateFloat,
-                                vec![dest_reg as usize, src_reg as usize],
-                                span,
-                            );
-                        }
-                        _ => {
-                            self.throw_error(VynError::TypeMismatch {
-                                expected: vec![Type::Integer, Type::Float],
-                                found: operand_type,
-                                span,
-                            });
-                            return None;
-                        }
-                    },
-                    TokenType::Not => {
-                        self.emit(OpCode::Not, vec![dest_reg as usize, src_reg as usize], span);
-                    }
-                    _ => unreachable!("Unhandled unary operator type"),
-                };
-
-                Some(dest_reg)
-            }
+            } => self.compile_unary_expr(operator.clone(), right, span),
 
             Expr::BinaryOperation {
                 left,
@@ -300,78 +219,6 @@ impl Compiler {
                 None
             }
         }
-    }
-
-    pub(crate) fn compile_binary_expr(
-        &mut self,
-        left_type: Type,
-        left: Expression,
-        _right_type: Type,
-        right: Expression,
-        operator: crate::tokens::Token,
-        span: Span,
-    ) -> Option<u8> {
-        let left_reg = self.compile_expression(left)?;
-        let right_reg = self.compile_expression(right)?;
-        let dest_reg = self.allocate_register()?;
-
-        let op_type = operator.get_token_type();
-
-        // Choose correct opcode based on operator and type
-        let opcode = match (op_type, &left_type) {
-            // Integer arithmetic
-            (TokenType::Plus, Type::Integer) => OpCode::AddInt,
-            (TokenType::Minus, Type::Integer) => OpCode::SubtractInt,
-            (TokenType::Asterisk, Type::Integer) => OpCode::MultiplyInt,
-            (TokenType::Slash, Type::Integer) => OpCode::DivideInt,
-            (TokenType::Caret, Type::Integer) => OpCode::ExponentInt,
-
-            // Float arithmetic
-            (TokenType::Plus, Type::Float) => OpCode::AddFloat,
-            (TokenType::Minus, Type::Float) => OpCode::SubtractFloat,
-            (TokenType::Asterisk, Type::Float) => OpCode::MultiplyFloat,
-            (TokenType::Slash, Type::Float) => OpCode::DivideFloat,
-            (TokenType::Caret, Type::Float) => OpCode::ExponentFloat,
-
-            // Integer comparisons
-            (TokenType::LessThan, Type::Integer) => OpCode::LessInt,
-            (TokenType::LessThanEqual, Type::Integer) => OpCode::LessEqualInt,
-            (TokenType::GreaterThan, Type::Integer) => OpCode::GreaterInt,
-            (TokenType::GreaterThanEqual, Type::Integer) => OpCode::GreaterEqualInt,
-
-            // Float comparisons
-            (TokenType::LessThan, Type::Float) => OpCode::LessFloat,
-            (TokenType::LessThanEqual, Type::Float) => OpCode::LessEqualFloat,
-            (TokenType::GreaterThan, Type::Float) => OpCode::GreaterFloat,
-            (TokenType::GreaterThanEqual, Type::Float) => OpCode::GreaterEqualFloat,
-
-            // Equality (works on any type)
-            (TokenType::Equal, _) => OpCode::Equal,
-            (TokenType::NotEqual, _) => OpCode::NotEqual,
-
-            // String concatenation
-            (TokenType::Plus, Type::String) => OpCode::ConcatString,
-
-            _ => {
-                self.throw_error(VynError::TypeMismatch {
-                    expected: vec![Type::Integer, Type::Float],
-                    found: left_type,
-                    span,
-                });
-                return None;
-            }
-        };
-
-        self.emit(
-            opcode,
-            vec![dest_reg as usize, left_reg as usize, right_reg as usize],
-            span,
-        );
-
-        self.free_register(left_reg);
-        self.free_register(right_reg);
-
-        Some(dest_reg)
     }
 
     pub(crate) fn get_expr_type(&mut self, expr: &Expression) -> Option<Type> {
@@ -419,7 +266,7 @@ impl Compiler {
         }
     }
 
-    fn allocate_register(&mut self) -> Option<u8> {
+    pub(crate) fn allocate_register(&mut self) -> Option<u8> {
         // First, try to reuse a freed register
         if let Some(reg) = self.free_registers.pop() {
             return Some(reg);
@@ -438,23 +285,23 @@ impl Compiler {
         Some(reg)
     }
 
-    fn free_register(&mut self, reg: u8) {
+    pub(crate) fn free_register(&mut self, reg: u8) {
         if !self.pinned_registers.contains(&reg) {
             self.free_registers.push(reg);
         }
     }
 
-    fn allocate_pinned_register(&mut self) -> Option<u8> {
+    pub(crate) fn allocate_pinned_register(&mut self) -> Option<u8> {
         let reg = self.allocate_register()?;
         self.pin_register(reg);
         Some(reg)
     }
 
-    fn pin_register(&mut self, reg: u8) {
+    pub(crate) fn pin_register(&mut self, reg: u8) {
         self.pinned_registers.insert(reg);
     }
 
-    fn unpin_register(&mut self, reg: u8) {
+    pub(crate) fn unpin_register(&mut self, reg: u8) {
         self.pinned_registers.remove(&reg);
         self.free_register(reg);
     }

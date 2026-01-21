@@ -2,7 +2,7 @@ use colored::*;
 
 use crate::{
     bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16},
-    compiler::compiler::Bytecode,
+    compiler::{compiler::Bytecode, debug_info::DebugInfo},
     runtime_value::RuntimeValue,
 };
 
@@ -15,10 +15,7 @@ pub fn disassemble(bytecode: &Bytecode) {
     disassemble_string_table(&bytecode.string_table);
 }
 
-fn disassemble_instructions(
-    instructions: &Instructions,
-    debug_info: &crate::compiler::compiler::DebugInfo,
-) {
+fn disassemble_instructions(instructions: &Instructions, debug_info: &DebugInfo) {
     let mut offset = 0;
 
     while offset < instructions.len() {

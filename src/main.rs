@@ -9,15 +9,13 @@ use vyn::{
 
 fn main() {
     let source = r#"
-    type Name = String
-    let person: Name = "FooBar"
+    -((10.0+(123.0/61718.0)*199.0))^2.0
         "#;
     let mut lexer = Lexer::new(source);
     let mut parser = Parser::new(lexer.tokenize());
     let program = parser.parse_program();
 
-    // NOTE: This isnt the file's final product
-    // This is just for debugging purposes
+    // TODO: A cli to hsndle this abomination
     match program {
         Ok(p) => {
             let mut compiler = Compiler::new();

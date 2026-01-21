@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::{
-        ast::{Expr, Expression, Program, Statement, Stmt},
-        type_annotation::TypeAnnotation,
-    },
+    ast::ast::{Expr, Expression, Program, Statement, Stmt},
     errors::{ErrorCollector, VynError},
     parser::{lookups::Precedence, type_parser::TypeTable},
     tokens::{Token, TokenInfo, TokenType},

@@ -13,8 +13,8 @@ pub enum Precedence {
     Comparison,
     Additive,
     Multiplicative,
-    Exponent,
     Unary,
+    Exponent,
     Call,
     Grouping,
 }

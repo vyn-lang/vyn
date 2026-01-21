@@ -2,6 +2,7 @@ use crate::{
     bytecode::bytecode::{OpCode, read_uint8},
     errors::VynError,
     runtime_value::RuntimeValue,
+    utils::Span,
     vyn_vm::vm::VynVM,
 };
 
@@ -22,7 +23,13 @@ impl VynVM {
             OpCode::ADD_INT => l + r,
             OpCode::SUBTRACT_INT => l - r,
             OpCode::MULTIPLY_INT => l * r,
-            OpCode::DIVIDE_INT => l / r,
+            OpCode::DIVIDE_INT => {
+                // if r == 0 {
+                //     return Err(VynError::DivisionByZero { span });
+                // }
+
+                l / r
+            }
             OpCode::EXPONENT_INT => l.pow(r as u32),
 
             _ => unreachable!("Invalid arith int opcode"),
