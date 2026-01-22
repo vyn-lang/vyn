@@ -38,6 +38,10 @@ pub enum Expr {
         operator: Token,
         right: Box<Expression>,
     },
+    VariableAssignment {
+        identifier: Box<Expression>,
+        new_value: Box<Expression>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,6 +53,7 @@ pub enum Stmt {
         identifier: Expression,
         value: Expression,
         annotated_type: TypeAnnotation,
+        mutable: bool,
         span: Span,
     },
     TypeAliasDeclaration {

@@ -8,7 +8,7 @@ use crate::{
     utils::throw_error,
 };
 use core::fmt;
-use std::mem;
+use std::{mem, process::id};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -81,6 +81,7 @@ impl TypeChecker {
                 identifier,
                 value,
                 annotated_type,
+                mutable,
                 span,
                 ..
             } => {
@@ -108,6 +109,7 @@ impl TypeChecker {
                     var_name,
                     an_type,
                     *span,
+                    *mutable,
                     &mut self.errors,
                 )?;
 
@@ -150,8 +152,11 @@ impl TypeChecker {
             Expr::StringLiteral(_) => Ok(Type::String),
             Expr::NilLiteral => Ok(Type::Nil),
             Expr::Identifier(name) => {
-                self.symbol_type_table
-                    .resolve_identifier(name, span, &mut self.errors)
+                let ident =
+                    self.symbol_type_table
+                        .resolve_identifier(name, span, &mut self.errors)?;
+
+                Ok(ident.symbol_type.clone())
             }
 
             Expr::Unary { operator, right } => self.check_unary(operator, right, span),
@@ -162,7 +167,47 @@ impl TypeChecker {
                 right,
             } => self.check_binary_expr(operator, left, right, span),
 
-            _ => unreachable!("Unknown expression type {:?}", expr.node),
+            Expr::VariableAssignment {
+                identifier,
+                new_value,
+            } => {
+                let ident_name = match &identifier.node {
+                    Expr::Identifier(n) => n.clone(),
+                    _ => {
+                        self.throw_error(VynError::LeftHandAssignment { span });
+                        return Err(());
+                    }
+                };
+
+                let value_type = self.check_expression(new_value)?;
+                let ident_symbol = self.symbol_type_table.resolve_identifier(
+                    &ident_name,
+                    span,
+                    &mut self.errors,
+                )?;
+
+                if !ident_symbol.mutable {
+                    self.throw_error(VynError::ImmutableMutation {
+                        identifier: ident_name,
+                        span: ident_symbol.span,
+                        mutation_span: span,
+                    });
+                    return Err(());
+                }
+
+                if ident_symbol.symbol_type != value_type {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![ident_symbol.symbol_type.clone()],
+                        found: value_type.clone(),
+                        span,
+                    });
+                    return Err(());
+                }
+
+                Ok(value_type)
+            }
+
+            _ => unreachable!("Unknown expression type {:#?}", expr.node),
         }
     }
 

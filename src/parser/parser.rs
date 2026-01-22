@@ -66,6 +66,7 @@ impl Parser {
         parser.register_led(TokenType::GreaterThanEqual, Parser::parse_binary_expr);
         parser.register_led(TokenType::Equal, Parser::parse_binary_expr);
         parser.register_led(TokenType::NotEqual, Parser::parse_binary_expr);
+        parser.register_led(TokenType::Assign, Parser::parse_assignment_expr);
 
         parser.register_stmt(TokenType::Let, Parser::parse_variable_decl);
         parser.register_stmt(TokenType::Type, Parser::parse_type_alias_decl);
@@ -112,6 +113,10 @@ impl Parser {
         if self.current < self.tokens.len() - 1 {
             self.current += 1;
         }
+    }
+
+    fn current_token_is(&self, token: TokenType) -> bool {
+        self.current_token().token.get_token_type() == token
     }
 
     fn is_at_delimiter(&self) -> bool {
@@ -468,6 +473,34 @@ impl Parser {
 
         Some(expr)
     }
+
+    pub fn parse_assignment_expr(&mut self, left: Expression) -> Option<Expression> {
+        let operator_info = self.current_token().clone();
+        let operator_precedence: u8 =
+            match Precedence::get_token_precedence(&operator_info.token.get_token_type()) {
+                Some(p) => p,
+                _ => Precedence::Default,
+            }
+            .into();
+
+        self.advance();
+
+        let right = self.try_parse_expression(operator_precedence - 1)?;
+
+        let full_span = Span {
+            line: operator_info.span.line,
+            start_column: left.span.start_column,
+            end_column: right.span.end_column,
+        };
+
+        let expr = Expr::VariableAssignment {
+            identifier: Box::new(left),
+            new_value: Box::new(right),
+        }
+        .spanned(full_span);
+
+        Some(expr)
+    }
 }
 
 // Statements
@@ -475,6 +508,15 @@ impl Parser {
     pub fn parse_variable_decl(&mut self) -> Option<Statement> {
         let let_tok = self.current_token().clone();
         self.advance();
+
+        // Check for mutability marker FIRST
+        let mut mutable = false;
+        if self.current_token_is(TokenType::At) {
+            self.advance();
+            mutable = true;
+        }
+
+        // THEN check for identifier
         if self.current_token().token.get_token_type() != TokenType::Identifier {
             self.errors.add(VynError::ExpectedToken {
                 expected: TokenType::Identifier,
@@ -485,16 +527,19 @@ impl Parser {
         }
 
         let ident = self.parse_identifier_literal()?;
+
         if !self.expect(TokenType::Colon) {
             return None;
         }
 
         let an_type = self.try_parse_type()?;
+
         if !self.expect(TokenType::Assign) {
             return None;
         }
 
         let value = self.try_parse_expression(Precedence::Default.into())?;
+
         if !self.expect_delimiter() {
             return None;
         }
@@ -505,6 +550,7 @@ impl Parser {
                 identifier: ident,
                 value,
                 annotated_type: an_type,
+                mutable,
                 span: Span {
                     line: let_tok.span.line,
                     start_column: let_tok.span.start_column,

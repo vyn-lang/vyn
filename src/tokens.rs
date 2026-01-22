@@ -23,6 +23,7 @@ pub enum Token {
     Slash,
     Caret,
     Bang,
+    At,
 
     // Comparison
     LessThan,
@@ -83,6 +84,7 @@ pub enum TokenType {
     Slash,
     Caret,
     Bang,
+    At,
 
     // Comparison
     LessThan,
@@ -144,6 +146,7 @@ impl fmt::Display for TokenType {
             TokenType::Slash => write!(f, "/"),
             TokenType::Caret => write!(f, "^"),
             TokenType::Bang => write!(f, "!"),
+            TokenType::At => write!(f, "@"),
 
             // Comparison
             TokenType::LessThan => write!(f, "<"),
@@ -225,6 +228,7 @@ impl Token {
             Token::Slash => TokenType::Slash,
             Token::Caret => TokenType::Caret,
             Token::Bang => TokenType::Bang,
+            Token::At => TokenType::At,
 
             // Comparison
             Token::LessThan => TokenType::LessThan,

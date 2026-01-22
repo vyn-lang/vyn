@@ -8,8 +8,11 @@ use vyn::{
 };
 
 fn main() {
-    let source = r#"
-    -((10.0+(123.0/61718.0)*199.0))^2.0
+    let source = r#" 
+    let @person_1: String = "Bob";
+    let @person_2: String = "Alice";
+
+    person_1 = person_2 = "None";
         "#;
     let mut lexer = Lexer::new(source);
     let mut parser = Parser::new(lexer.tokenize());

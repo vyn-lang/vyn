@@ -1,6 +1,9 @@
 use crate::{
-    ast::ast::Node, runtime_value::RuntimeType, tokens::TokenType,
-    type_checker::type_checker::Type, utils::Span,
+    ast::ast::{Expr, Expression, Node},
+    runtime_value::RuntimeType,
+    tokens::TokenType,
+    type_checker::type_checker::Type,
+    utils::Span,
 };
 use colored::*;
 
@@ -50,6 +53,14 @@ pub enum VynError {
         left_type: Type,
         right_type: Type,
         span: Span,
+    },
+    LeftHandAssignment {
+        span: Span,
+    },
+    ImmutableMutation {
+        identifier: String,
+        span: Span,
+        mutation_span: Span,
     },
     UndefinedVariable {
         name: String,
@@ -140,6 +151,8 @@ impl VynError {
                 redeclaration_span, ..
             } => *redeclaration_span,
             VynError::TypeAliasRedeclaration { span, .. } => *span,
+            VynError::ImmutableMutation { span, .. } => *span,
+            VynError::LeftHandAssignment { span, .. } => *span,
 
             VynError::UnknownAST { span, .. } => *span,
             VynError::UndefinedIdentifier { span, .. } => *span,
@@ -171,6 +184,8 @@ impl VynError {
             VynError::UndefinedVariable { .. } => "Type",
             VynError::VariableRedeclaration { .. } => "Type",
             VynError::TypeAliasRedeclaration { .. } => "Type",
+            VynError::ImmutableMutation { .. } => "Type",
+            VynError::LeftHandAssignment { .. } => "Type",
 
             VynError::UnknownAST { .. } => "Compiler",
             VynError::UndefinedIdentifier { .. } => "Compiler",
@@ -270,6 +285,12 @@ impl VynError {
             }
             VynError::UndefinedVariable { name, .. } => {
                 format!("Undefined variable '{}'", name)
+            }
+            VynError::ImmutableMutation { identifier, .. } => {
+                format!("Cannot mutate immutable identifier '{}'", identifier)
+            }
+            VynError::LeftHandAssignment { .. } => {
+                format!("Cannot perform left-handed assignment")
             }
             VynError::VariableRedeclaration {
                 name,
@@ -399,6 +420,12 @@ impl VynError {
             }
             VynError::TypeAliasRedeclaration { .. } => {
                 Some("Remove the redeclaration and use it".to_string())
+            }
+            VynError::LeftHandAssignment { .. } => {
+                None
+            }
+            VynError::ImmutableMutation { identifier, .. } => {
+                Some(format!("Prefix identifier '{identifier}' with '@'"))
             }
             VynError::InvalidUnaryOp { operator, .. } => match operator {
                 TokenType::Not => Some("Logical negation requires a boolean operand".to_string()),
@@ -604,6 +631,11 @@ impl VynError {
                 eprintln!();
                 eprintln!("{}", "Originally declared here:".white().dimmed());
                 self.print_code_snippet(source, *original_span, false);
+            }
+            VynError::ImmutableMutation { mutation_span, .. } => {
+                eprintln!();
+                eprintln!("{}", "identifier mutated here".white().dimmed());
+                self.print_code_snippet(source, *mutation_span, false);
             }
             _ => {}
         }

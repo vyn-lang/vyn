@@ -1,11 +1,8 @@
 use crate::{
-    bytecode::bytecode::{Instructions, OpCode, ToOpcode},
+    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8},
     errors::VynError,
     runtime_value::RuntimeValue,
 };
-/*
- * TODO: Refactor VM
- * */
 
 // Singletons for common values
 pub const NIL: RuntimeValue = RuntimeValue::NilLiteral;
@@ -158,7 +155,12 @@ impl VynVM {
                 }
 
                 OpCode::MOVE => {
-                    unreachable!() // no assignment statements yet
+                    let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
+                    let src = read_uint8(&self.instructions, self.ip + 2) as usize;
+                    self.ip += 2;
+
+                    let value = self.get_register(src);
+                    self.set_register(dest, value);
                 }
 
                 _ => unreachable!("Unknown opcode byte {}", opcode.to_opcode()),

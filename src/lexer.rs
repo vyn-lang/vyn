@@ -215,6 +215,10 @@ impl Lexer {
                 self.advance();
                 Token::Slash
             }
+            Some('@') => {
+                self.advance();
+                Token::At
+            }
             Some('^') => {
                 self.advance();
                 Token::Caret

@@ -211,6 +211,35 @@ impl Compiler {
                 self.compile_binary_expr(left_type, *left, right_type, *right, operator, span)
             }
 
+            Expr::VariableAssignment {
+                identifier,
+                new_value,
+            } => {
+                let name = match identifier.node {
+                    Expr::Identifier(n) => n,
+                    _ => unreachable!("Assignment target must be identifier"),
+                };
+
+                let dest_reg = match self.symbol_table.resolve_identifier(&name, span) {
+                    Ok(symbol) => symbol.register,
+                    Err(ve) => {
+                        self.throw_error(ve);
+                        return None;
+                    }
+                };
+
+                let src_reg = self.compile_expression(*new_value)?;
+
+                self.emit(
+                    OpCode::Move,
+                    vec![dest_reg as usize, src_reg as usize],
+                    span,
+                );
+
+                self.free_register(src_reg);
+                Some(dest_reg)
+            }
+
             unknown => {
                 self.throw_error(VynError::UnknownAST {
                     node: unknown.to_node(),

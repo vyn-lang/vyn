@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::type_annotation::TypeAnnotation,
     errors::{ErrorCollector, VynError},
     type_checker::type_checker::Type,
     utils::Span,
@@ -10,11 +9,12 @@ use crate::{
 pub struct SymbolType {
     pub symbol_type: Type,
     pub span: Span,
+    pub mutable: bool,
 }
 
 pub struct SymbolTypeTable {
     store: HashMap<String, SymbolType>,
-    type_aliases: HashMap<String, Type>,
+    type_aliases: HashMap<String, SymbolType>,
 }
 
 impl SymbolTypeTable {
@@ -30,6 +30,7 @@ impl SymbolTypeTable {
         ident: String,
         t: Type,
         span: Span,
+        mutable: bool,
         errors: &mut ErrorCollector,
     ) -> Result<(), ()> {
         if let Some(existing) = self.store.get(&ident) {
@@ -44,6 +45,7 @@ impl SymbolTypeTable {
         let symbol_type = SymbolType {
             symbol_type: t,
             span,
+            mutable,
         };
 
         self.store.insert(ident, symbol_type);
@@ -55,9 +57,9 @@ impl SymbolTypeTable {
         ident: &str,
         span: Span,
         errors: &mut ErrorCollector,
-    ) -> Result<Type, ()> {
+    ) -> Result<&SymbolType, ()> {
         match self.store.get(ident) {
-            Some(s) => Ok(s.symbol_type.clone()),
+            Some(s) => Ok(s),
             None => {
                 // Check type alias instead
                 let al_type = self.type_aliases.get(ident);
@@ -70,7 +72,7 @@ impl SymbolTypeTable {
                     return Err(());
                 }
 
-                Ok(al_type.unwrap().clone())
+                Ok(al_type.unwrap())
             }
         }
     }
@@ -85,7 +87,13 @@ impl SymbolTypeTable {
             return Err(VynError::TypeAliasRedeclaration { name, span });
         }
 
-        self.type_aliases.insert(name, an_type);
+        let symbol = SymbolType {
+            symbol_type: an_type,
+            mutable: false,
+            span,
+        };
+
+        self.type_aliases.insert(name, symbol);
         Ok(())
     }
 }
