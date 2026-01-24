@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::{
     errors::{ErrorCollector, VynError},
@@ -6,13 +7,16 @@ use crate::{
     utils::Span,
 };
 
+#[derive(Clone)]
 pub struct SymbolType {
     pub symbol_type: Type,
     pub span: Span,
     pub mutable: bool,
 }
 
+#[derive(Clone)]
 pub struct SymbolTypeTable {
+    pub parent: Option<Rc<SymbolTypeTable>>, // Outer scope
     store: HashMap<String, SymbolType>,
     type_aliases: HashMap<String, SymbolType>,
 }
@@ -20,6 +24,7 @@ pub struct SymbolTypeTable {
 impl SymbolTypeTable {
     pub fn new() -> Self {
         Self {
+            parent: None,
             store: HashMap::new(),
             type_aliases: HashMap::new(),
         }
@@ -58,23 +63,33 @@ impl SymbolTypeTable {
         span: Span,
         errors: &mut ErrorCollector,
     ) -> Result<&SymbolType, ()> {
-        match self.store.get(ident) {
-            Some(s) => Ok(s),
-            None => {
-                // Check type alias instead
-                let al_type = self.type_aliases.get(ident);
-
-                if al_type.is_none() {
-                    errors.add(VynError::UndefinedVariable {
-                        name: ident.to_string(),
-                        span,
-                    });
-                    return Err(());
-                }
-
-                Ok(al_type.unwrap())
-            }
+        // Check current scope
+        if let Some(s) = self.store.get(ident) {
+            return Ok(s);
         }
+
+        // Check type aliases in current scope
+        if let Some(al_type) = self.type_aliases.get(ident) {
+            return Ok(al_type);
+        }
+
+        // Walk up parent scopes
+        let mut current = self.parent.as_ref();
+        while let Some(parent) = current {
+            if let Some(s) = parent.store.get(ident) {
+                return Ok(s);
+            }
+            if let Some(al_type) = parent.type_aliases.get(ident) {
+                return Ok(al_type);
+            }
+            current = parent.parent.as_ref();
+        }
+
+        errors.add(VynError::UndefinedVariable {
+            name: ident.to_string(),
+            span,
+        });
+        Err(())
     }
 
     pub fn enroll_type_alias(
@@ -95,5 +110,21 @@ impl SymbolTypeTable {
 
         self.type_aliases.insert(name, symbol);
         Ok(())
+    }
+
+    pub fn enter_scope(&self) -> SymbolTypeTable {
+        SymbolTypeTable {
+            parent: Some(Rc::new(self.clone())),
+            store: HashMap::new(),
+            type_aliases: HashMap::new(),
+        }
+    }
+
+    pub fn exit_scope(self) -> SymbolTypeTable {
+        match self.parent {
+            Some(parent_rc) => Rc::try_unwrap(parent_rc).unwrap_or_else(|rc| (*rc).clone()),
+            // This should ever occur unless called without a parent
+            None => panic!("Cannot exit global scope"),
+        }
     }
 }

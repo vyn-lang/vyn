@@ -1,1 +1,11 @@
-let x: Int = 1
+let @person: String = "None";
+
+stdout# person
+
+if person == "None" {
+  person = "Bob"
+} else {
+  person = "Alice"
+}
+
+stdout# person

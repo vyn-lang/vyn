@@ -60,7 +60,6 @@ impl TypeChecker {
     /// Main entry point
     pub fn check_program(&mut self, program: &Program) -> Result<(), ErrorCollector> {
         for stmt in &program.statements {
-            // Ignore individual errors, keep checking all statements
             let _ = self.check_statement(stmt);
         }
 
@@ -72,43 +71,41 @@ impl TypeChecker {
     }
 
     pub(crate) fn check_statement(&mut self, stmt: &Statement) -> Result<(), ()> {
+        let span = stmt.span;
+
         match &stmt.node {
             Stmt::Expression { expression } => {
                 self.check_expression(expression)?;
                 Ok(())
             }
+
             Stmt::VariableDeclaration {
                 identifier,
                 value,
                 annotated_type,
                 mutable,
-                span,
-                ..
             } => {
-                let an_type = Type::from_anotated_type(annotated_type);
+                let expected_type = Type::from_anotated_type(annotated_type);
                 let value_type = self.check_expression(value)?;
 
                 let var_name = match &identifier.node {
                     Expr::Identifier(name) => name.clone(),
-                    _ => unreachable!("Var names are always identifiers"),
+                    _ => unreachable!("Variable name must be an identifier"),
                 };
 
-                // Check type match first
-                if an_type != value_type {
+                if expected_type != value_type {
                     self.throw_error(VynError::DeclarationTypeMismatch {
-                        expected: an_type.clone(),
+                        expected: expected_type.clone(),
                         got: value_type,
-                        span: *span,
+                        span,
                     });
-
                     return Err(());
                 }
 
-                // Declare in symbol table (no register assignment during type checking)
                 self.symbol_type_table.declare_identifier(
                     var_name,
-                    an_type,
-                    *span,
+                    expected_type,
+                    span,
                     *mutable,
                     &mut self.errors,
                 )?;
@@ -116,35 +113,66 @@ impl TypeChecker {
                 Ok(())
             }
 
-            Stmt::TypeAliasDeclaration {
-                identifier,
-                value,
-                span,
-            } => {
-                let name = match identifier.node.clone() {
-                    Expr::Identifier(n) => n,
-                    _ => unreachable!("Type alias identifier must be caught by compiler"),
+            Stmt::TypeAliasDeclaration { identifier, value } => {
+                let name = match &identifier.node {
+                    Expr::Identifier(n) => n.clone(),
+                    _ => unreachable!("Type alias identifier must be an identifier"),
                 };
 
-                let result = self.symbol_type_table.enroll_type_alias(
+                if let Err(err) = self.symbol_type_table.enroll_type_alias(
                     name,
                     Type::from_anotated_type(value),
-                    span.clone(),
+                    span,
+                ) {
+                    self.throw_error(err);
+                }
+
+                Ok(())
+            }
+
+            Stmt::Block { statements } => {
+                let parent_table = mem::replace(
+                    &mut self.symbol_type_table,
+                    SymbolTypeTable::new(), // temporary placeholder
                 );
 
-                if result.is_err() {
-                    self.throw_error(result.err().unwrap());
+                // Create child scope from parent
+                self.symbol_type_table = parent_table.enter_scope();
+
+                for stmt in statements {
+                    let _ = self.check_statement(stmt);
+                }
+
+                // Exit scope - restore parent
+                self.symbol_type_table = mem::replace(
+                    &mut self.symbol_type_table,
+                    SymbolTypeTable::new(), // temporary placeholder
+                )
+                .exit_scope();
+
+                Ok(())
+            }
+
+            Stmt::IfDeclaration {
+                condition,
+                consequence,
+                alternate,
+            } => {
+                self.check_expression(condition)?;
+                self.check_statement(&consequence)?;
+
+                if let Some(alt) = alternate.as_ref() {
+                    self.check_statement(alt)?;
                 }
                 Ok(())
             }
 
-            Stmt::StdoutLog { .. } => {
-                // Just skip, no need to typecheck
-                // a logger
+            Stmt::StdoutLog { log_value } => {
+                self.check_expression(log_value)?;
                 Ok(())
             }
 
-            _ => throw_error(&format!("unknown ast: \n\n{:#?}", stmt.node), 1),
+            _ => throw_error(&format!("unknown ast:\n\n{:#?}", stmt.node), 1),
         }
     }
 
@@ -157,6 +185,7 @@ impl TypeChecker {
             Expr::BooleanLiteral(_) => Ok(Type::Bool),
             Expr::StringLiteral(_) => Ok(Type::String),
             Expr::NilLiteral => Ok(Type::Nil),
+
             Expr::Identifier(name) => {
                 let ident =
                     self.symbol_type_table
@@ -204,7 +233,7 @@ impl TypeChecker {
                 if ident_symbol.symbol_type != value_type {
                     self.throw_error(VynError::TypeMismatch {
                         expected: vec![ident_symbol.symbol_type.clone()],
-                        found: value_type.clone(),
+                        found: value_type,
                         span,
                     });
                     return Err(());

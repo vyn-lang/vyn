@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
 use crate::{
-    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8},
+    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16},
     errors::VynError,
     runtime_value::RuntimeValue,
 };
@@ -147,6 +147,25 @@ impl VynVM {
                 }
                 OpCode::NOT_EQUAL => {
                     self.compare_equality(opcode)?;
+                }
+
+                OpCode::JUMP_IF_FALSE => {
+                    let cond_reg_idx = read_uint8(&self.instructions, self.ip + 1);
+                    let jump_idx = read_uint16(&self.instructions, self.ip + 2);
+                    self.ip += 3;
+
+                    let cond_reg = self.get_register(cond_reg_idx as usize);
+
+                    if !self.is_truthy(cond_reg) {
+                        self.ip = jump_idx as usize;
+                        continue;
+                    }
+                }
+
+                OpCode::JUMP_UNCOND => {
+                    let jump_idx = read_uint16(&self.instructions, self.ip + 1);
+                    self.ip = jump_idx as usize;
+                    continue;
                 }
 
                 OpCode::STORE_GLOBAL => {

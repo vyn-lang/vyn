@@ -54,16 +54,21 @@ pub enum Stmt {
         value: Expression,
         annotated_type: TypeAnnotation,
         mutable: bool,
-        span: Span,
     },
     TypeAliasDeclaration {
         identifier: Expression,
         value: TypeAnnotation,
-        span: Span,
     },
     StdoutLog {
         log_value: Expression,
-        span: Span,
+    },
+    Block {
+        statements: Vec<Statement>,
+    },
+    IfDeclaration {
+        condition: Expression,
+        consequence: Box<Statement>,
+        alternate: Box<Option<Statement>>,
     },
 }
 

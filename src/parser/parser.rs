@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
+    compiler::symbol_table::SymbolTable,
     errors::{ErrorCollector, VynError},
     parser::{lookups::Precedence, type_parser::TypeTable},
     tokens::{Token, TokenInfo, TokenType},
@@ -71,6 +72,7 @@ impl Parser {
         parser.register_stmt(TokenType::Let, Parser::parse_variable_decl);
         parser.register_stmt(TokenType::Type, Parser::parse_type_alias_decl);
         parser.register_stmt(TokenType::Stdout, Parser::parse_stdout_log_decl);
+        parser.register_stmt(TokenType::If, Parser::parse_if_stmt_decl);
 
         parser
     }
@@ -178,6 +180,12 @@ impl Parser {
         }
     }
 
+    fn ignore(&mut self, token_type: TokenType) {
+        if self.current_token_type() == token_type {
+            self.advance();
+        }
+    }
+
     fn skip_newlines_in_delimiters(&mut self) {
         if !self.delimiter_stack.is_empty() {
             self.skip_delimiters();
@@ -200,6 +208,10 @@ impl Parser {
         self.tokens
             .get(self.current)
             .unwrap_or_else(|| self.tokens.last().expect("Token vector is empty!"))
+    }
+
+    pub(crate) fn current_token_type(&self) -> TokenType {
+        self.current_token().token.get_token_type()
     }
 
     fn is_eof(&self) -> bool {
@@ -546,19 +558,20 @@ impl Parser {
         }
 
         let val_span = value.span.clone();
+        let full_span = Span {
+            line: let_tok.span.line,
+            start_column: let_tok.span.start_column,
+            end_column: val_span.end_column,
+        };
+
         Some(
             Stmt::VariableDeclaration {
                 identifier: ident,
                 value,
                 annotated_type: an_type,
                 mutable,
-                span: Span {
-                    line: let_tok.span.line,
-                    start_column: let_tok.span.start_column,
-                    end_column: val_span.end_column,
-                },
             }
-            .spanned(let_tok.span),
+            .spanned(full_span),
         )
     }
 
@@ -584,9 +597,8 @@ impl Parser {
         let stmt = Stmt::TypeAliasDeclaration {
             identifier: ident,
             value: type_alias,
-            span: ident_span,
         }
-        .spanned(type_tok_info.span);
+        .spanned(ident_span);
 
         Some(stmt)
     }
@@ -600,7 +612,7 @@ impl Parser {
         }
 
         let log_value = self.try_parse_expression(Precedence::Default.into())?;
-        
+
         if !self.expect_delimiter() {
             return None;
         }
@@ -611,12 +623,52 @@ impl Parser {
             end_column: log_value.span.end_column,
         };
 
-        let stmt = Stmt::StdoutLog {
-            log_value,
-            span: full_span,
-        }
-        .spanned(full_span);
+        let stmt = Stmt::StdoutLog { log_value }.spanned(full_span);
 
         Some(stmt)
+    }
+
+    fn parse_block_stmt(&mut self) -> Option<Statement> {
+        let lb_tok_info = self.current_token().clone();
+
+        if !self.expect(TokenType::LeftBrace) {
+            return None;
+        }
+        self.ignore(TokenType::Newline);
+
+        let mut statements: Vec<Statement> = Vec::new();
+
+        while self.current_token_type() != TokenType::RightBrace {
+            statements.push(self.try_parse_statement()?);
+        }
+
+        if !self.expect(TokenType::RightBrace) {
+            return None;
+        }
+
+        let stmt = Stmt::Block { statements }.spanned(lb_tok_info.span);
+        Some(stmt)
+    }
+
+    pub fn parse_if_stmt_decl(&mut self) -> Option<Statement> {
+        let if_tok_info = self.current_token().clone();
+        self.advance();
+
+        let condition = self.try_parse_expression(Precedence::Default.into())?;
+        let consequence = self.parse_block_stmt()?;
+        let mut alternate: Option<Statement> = None;
+
+        if self.current_token_type() == TokenType::Else {
+            self.advance(); // Eat else token
+            alternate = self.parse_block_stmt();
+        }
+
+        let stmt = Stmt::IfDeclaration {
+            condition,
+            consequence: Box::new(consequence),
+            alternate: Box::new(alternate),
+        };
+
+        Some(stmt.spanned(if_tok_info.span))
     }
 }

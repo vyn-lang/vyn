@@ -28,7 +28,7 @@ fn disassemble_instructions(instructions: &Instructions, debug_info: &DebugInfo)
 
         print!(
             "{} {} {} {}",
-            format!("{:04}", offset).cyan(),
+            format!("{:#04x}", offset).cyan(),
             format!("{}:{}-{}", span.line, span.start_column, span.end_column).bright_black(),
             definition.name.bright_white(),
             format!("({:#04x})", opcode_byte).cyan()
@@ -126,6 +126,9 @@ fn is_register_operand(opcode: &OpCode, operand_index: usize) -> bool {
         OpCode::StoreGlobal => {
             operand_index == 1 // src_reg (operand 0 is global index)
         }
+
+        OpCode::JumpIfFalse | OpCode::JumpUncond => true,
+
         OpCode::Halt => false,
     }
 }
@@ -161,7 +164,7 @@ fn disassemble_constants(constants: &Vec<RuntimeValue>) {
     for (i, constant) in constants.iter().enumerate() {
         println!(
             "{} {}",
-            format!("{:#04x}", i).cyan(),
+            format!("{:04}", i).cyan(),
             format!("{:?}", constant).bright_white()
         );
     }
@@ -177,7 +180,7 @@ fn disassemble_string_table(strings: &Vec<String>) {
     for (i, string) in strings.iter().enumerate() {
         println!(
             "{} {}",
-            format!("{:#04x}", i).cyan(),
+            format!("{:04}", i).cyan(),
             format!("{:?}", string).bright_white()
         );
     }

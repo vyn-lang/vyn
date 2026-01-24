@@ -63,6 +63,10 @@ pub enum OpCode {
 
     // Printing
     LogAddr = 0x51,
+
+    // Jumps
+    JumpIfFalse = 0x52,
+    JumpUncond = 0x53,
 }
 
 impl OpCode {
@@ -112,6 +116,8 @@ impl OpCode {
 
     pub const MOVE: u8 = 0x50;
     pub const LOG_ADDR: u8 = 0x51;
+    pub const JUMP_IF_FALSE: u8 = 0x52;
+    pub const JUMP_UNCOND: u8 = 0x53;
 }
 
 impl fmt::Display for OpCode {
@@ -171,6 +177,26 @@ impl OpCode {
         }
 
         instructions
+    }
+
+    pub fn change_operand(
+        instructions: &mut Instructions,
+        position: usize,
+        new_operands: Vec<usize>,
+    ) {
+        let opcode = instructions[position].to_opcode();
+        let definition = OpCode::get_definition(opcode);
+
+        let mut offset = position + 1; // Skip opcode byte
+
+        for (i, width) in definition.operands_width.iter().enumerate() {
+            match width {
+                1 => instructions[offset] = new_operands[i] as u8,
+                2 => BigEndian::write_u16(&mut instructions[offset..], new_operands[i] as u16),
+                _ => unreachable!("Cannot change operand with width {}", width),
+            }
+            offset += width;
+        }
     }
 
     pub fn get_definition(opcode: OpCode) -> Definition {
@@ -337,6 +363,16 @@ impl OpCode {
                 name: "LOG_ADDR",
                 operands_width: vec![1],
             },
+
+            // Jumping
+            OpCode::JumpIfFalse => Definition {
+                name: "JUMP_IF_FALSE",
+                operands_width: vec![1, 2],
+            },
+            OpCode::JumpUncond => Definition {
+                name: "JUMP_UNCOND",
+                operands_width: vec![2],
+            },
         }
     }
 }
@@ -383,6 +419,8 @@ impl ToOpcode for u8 {
             0x41 => OpCode::LoadGlobal,
             0x50 => OpCode::Move,
             0x51 => OpCode::LogAddr,
+            0x52 => OpCode::JumpIfFalse,
+            0x53 => OpCode::JumpUncond,
             _ => unreachable!("Cannot convert byte '0x{:02X}' to an opcode", self),
         }
     }

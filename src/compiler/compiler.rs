@@ -1,4 +1,4 @@
-use std::{collections::HashSet, mem};
+use std::{collections::HashSet, mem, os::android::raw::stat};
 
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
@@ -50,10 +50,6 @@ impl Compiler {
 
     /// Main entry point
     pub fn compile_program(&mut self, program: Program) -> Result<Bytecode, ErrorCollector> {
-        // Type check the entire program before compiling
-        // let mut type_checker = TypeChecker::new();
-        // type_checker.check_program(&program)?;
-
         for stmt in program.statements {
             let result = self.try_compile_statement(stmt);
 
@@ -83,7 +79,6 @@ impl Compiler {
             Stmt::VariableDeclaration {
                 identifier,
                 value,
-                span,
                 annotated_type,
                 ..
             } => {
@@ -118,12 +113,71 @@ impl Compiler {
                 Some(())
             }
 
-            Stmt::StdoutLog { log_value, span } => {
+            Stmt::StdoutLog { log_value } => {
                 let src = self.compile_expression(log_value)?;
 
                 self.emit(OpCode::LogAddr, vec![src as usize], span);
                 self.free_register(src);
                 Some(())
+            }
+
+            Stmt::Block { statements } => {
+                for stmt in statements {
+                    self.try_compile_statement(stmt)?;
+                }
+
+                Some(())
+            }
+
+            Stmt::IfDeclaration {
+                condition,
+                consequence,
+                alternate,
+            } => {
+                let cond_idx = self.compile_expression(condition)?;
+
+                // Emit jump with placeholder (keep cond_idx for patching later)
+                let jump_false_pos =
+                    self.emit(OpCode::JumpIfFalse, vec![cond_idx as usize, 9999], span);
+
+                // NOW free the register since we've emitted the instruction
+                self.free_register(cond_idx);
+
+                self.try_compile_statement(*consequence)?;
+
+                let end_block = self.instructions.len();
+                OpCode::change_operand(
+                    &mut self.instructions,
+                    jump_false_pos,
+                    vec![cond_idx as usize, end_block],
+                );
+
+                if let Some(alt) = alternate.as_ref() {
+                    // '9999' is another bogus value to patch
+                    let jump_pos = self.emit(OpCode::JumpUncond, vec![9999], span);
+
+                    // Repatch
+                    let end_block = self.instructions.len();
+                    OpCode::change_operand(
+                        &mut self.instructions,
+                        jump_false_pos,
+                        vec![cond_idx as usize, end_block],
+                    );
+
+                    self.try_compile_statement(alt.clone())?;
+
+                    let end_jmp_block = self.instructions.len();
+                    OpCode::change_operand(&mut self.instructions, jump_pos, vec![end_jmp_block]);
+                }
+                Some(())
+            }
+
+            unknown => {
+                self.throw_error(VynError::UnknownAST {
+                    node: unknown.to_node(),
+                    span,
+                });
+                None
             }
 
             unknown => {
@@ -246,14 +300,6 @@ impl Compiler {
 
                 self.free_register(src_reg);
                 Some(dest_reg)
-            }
-
-            unknown => {
-                self.throw_error(VynError::UnknownAST {
-                    node: unknown.to_node(),
-                    span,
-                });
-                None
             }
         }
     }
