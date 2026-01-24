@@ -24,8 +24,12 @@ pub struct CliArgs {
     pub quiet: bool,
 
     /// Slow down compilation for debugging
-    #[arg(long, global = true, hide = true)]
+    #[arg(long, global = true)]
     pub slow_mode: bool,
+
+    /// Show time taken for each phase
+    #[arg(long, global = true)]
+    pub time: bool,
 }
 
 #[derive(Subcommand)]

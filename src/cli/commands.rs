@@ -5,10 +5,12 @@ use crate::compiler::compiler::Compiler;
 use crate::compiler::disassembler::disassemble;
 use crate::lexer::Lexer;
 use crate::parser::parser::Parser;
+use crate::utils::print_info;
 use crate::vyn_vm::vm::VynVM;
 use colored::*;
 use std::fs;
 use std::path::PathBuf;
+use std::time::Instant;
 
 pub const VERSION: &str = "0.1.0";
 
@@ -45,10 +47,12 @@ impl CommandHandler {
         tracker.start();
 
         // Compile the program
+        let compile_timer_start = Instant::now();
         let bytecode = match self.compile_program(&source, &mut tracker) {
             Ok(bc) => bc,
             Err(code) => return Err(code),
         };
+        let compile_timer_duration = compile_timer_start.elapsed();
 
         tracker.finish();
 
@@ -63,12 +67,20 @@ impl CommandHandler {
             bytecode.string_table,
         );
 
+        let vm_timer_start = Instant::now();
         if let Err(e) = vm.execute() {
             if !self.args.quiet {
                 eprintln!();
                 e.report(&source);
             }
             return Err(2);
+        }
+        let vm_timer_duration = vm_timer_start.elapsed();
+
+        if self.args.time {
+            println!();
+            print_info(&format!("Compilation took {compile_timer_duration:?}"));
+            print_info(&format!("Program took {vm_timer_duration:?}"));
         }
 
         Ok(())
@@ -89,12 +101,15 @@ impl CommandHandler {
         tracker.start();
 
         // Tokenize
+        let tokenizing_timer_start = Instant::now();
         tracker.begin_phase(Phase::Tokenizing);
         let mut lexer = Lexer::new(&source);
         let tokens = lexer.tokenize();
         tracker.complete_phase(Phase::Tokenizing);
+        let tokenizing_timer_duration = tokenizing_timer_start.elapsed();
 
         // Parse
+        let parsing_timer_start = Instant::now();
         tracker.begin_phase(Phase::Parsing);
         let mut parser = Parser::new(tokens);
         let program = match parser.parse_program() {
@@ -108,8 +123,10 @@ impl CommandHandler {
             }
         };
         tracker.complete_phase(Phase::Parsing);
+        let parsing_timer_duration = parsing_timer_start.elapsed();
 
         // Type check
+        let tc_timer_start = Instant::now();
         tracker.begin_phase(Phase::TypeChecking);
         let mut type_checker = crate::type_checker::type_checker::TypeChecker::new();
         if let Err(errors) = type_checker.check_program(&program) {
@@ -120,16 +137,27 @@ impl CommandHandler {
             return Err(1);
         }
         tracker.complete_phase(Phase::TypeChecking);
+        let tc_timer_duration = tc_timer_start.elapsed();
 
         tracker.finish();
 
         if !self.args.quiet {
-            println!();
             println!(
                 "{} {}",
                 Theme::PHASE_COMPLETE.color(Theme::SUCCESS).bold(),
                 "No type errors found".bright_white()
             );
+        }
+
+        if self.args.time {
+            println!();
+            print_info(&format!("Tokenization took {tokenizing_timer_duration:?}"));
+            print_info(&format!("Parsing took {parsing_timer_duration:?}"));
+            print_info(&format!("Type checking took {tc_timer_duration:?}"));
+
+            let total = tokenizing_timer_duration + parsing_timer_duration + tc_timer_duration;
+
+            print_info(&format!("Compilation took {total:?}"));
         }
 
         Ok(())
