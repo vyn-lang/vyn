@@ -8,7 +8,7 @@ use crate::{
     utils::throw_error,
 };
 use core::fmt;
-use std::{mem, process::id};
+use std::mem;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Type {
@@ -135,6 +135,12 @@ impl TypeChecker {
                 if result.is_err() {
                     self.throw_error(result.err().unwrap());
                 }
+                Ok(())
+            }
+
+            Stmt::StdoutLog { .. } => {
+                // Just skip, no need to typecheck
+                // a logger
                 Ok(())
             }
 

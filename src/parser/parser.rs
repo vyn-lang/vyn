@@ -70,6 +70,7 @@ impl Parser {
 
         parser.register_stmt(TokenType::Let, Parser::parse_variable_decl);
         parser.register_stmt(TokenType::Type, Parser::parse_type_alias_decl);
+        parser.register_stmt(TokenType::Stdout, Parser::parse_stdout_log_decl);
 
         parser
     }
@@ -586,6 +587,35 @@ impl Parser {
             span: ident_span,
         }
         .spanned(type_tok_info.span);
+
+        Some(stmt)
+    }
+
+    pub fn parse_stdout_log_decl(&mut self) -> Option<Statement> {
+        let stdout_tok_info = self.current_token().clone();
+        self.advance();
+
+        if !self.expect(TokenType::Hashtag) {
+            return None;
+        }
+
+        let log_value = self.try_parse_expression(Precedence::Default.into())?;
+        
+        if !self.expect_delimiter() {
+            return None;
+        }
+
+        let full_span = Span {
+            line: stdout_tok_info.span.line,
+            start_column: stdout_tok_info.span.start_column,
+            end_column: log_value.span.end_column,
+        };
+
+        let stmt = Stmt::StdoutLog {
+            log_value,
+            span: full_span,
+        }
+        .spanned(full_span);
 
         Some(stmt)
     }

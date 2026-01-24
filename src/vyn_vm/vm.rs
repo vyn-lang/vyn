@@ -1,3 +1,5 @@
+use std::io::{self, Write};
+
 use crate::{
     bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8},
     errors::VynError,
@@ -161,6 +163,18 @@ impl VynVM {
 
                     let value = self.get_register(src);
                     self.set_register(dest, value);
+                }
+
+                OpCode::LOG_ADDR => {
+                    let src = read_uint8(&self.instructions, self.ip + 1) as usize;
+                    self.ip += 1;
+
+                    let value = self.get_register(src);
+                    let stdout = io::stdout();
+                    let mut out = stdout.lock();
+
+                    value.write_to(&mut out, &self.strings).unwrap();
+                    out.write_all(b"\n").unwrap();
                 }
 
                 _ => unreachable!("Unknown opcode byte {}", opcode.to_opcode()),

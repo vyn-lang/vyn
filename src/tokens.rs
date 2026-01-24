@@ -24,6 +24,7 @@ pub enum Token {
     Caret,
     Bang,
     At,
+    Hashtag,
 
     // Comparison
     LessThan,
@@ -66,6 +67,7 @@ pub enum Token {
     Not,
     Type,
     Return,
+    Stdout,
 }
 
 #[derive(Eq, PartialEq, Hash, Debug, Clone)]
@@ -85,6 +87,7 @@ pub enum TokenType {
     Caret,
     Bang,
     At,
+    Hashtag,
 
     // Comparison
     LessThan,
@@ -127,6 +130,7 @@ pub enum TokenType {
     And,
     Not,
     Return,
+    Stdout,
 }
 
 impl fmt::Display for TokenType {
@@ -147,6 +151,7 @@ impl fmt::Display for TokenType {
             TokenType::Caret => write!(f, "^"),
             TokenType::Bang => write!(f, "!"),
             TokenType::At => write!(f, "@"),
+            TokenType::Hashtag => write!(f, "#"),
 
             // Comparison
             TokenType::LessThan => write!(f, "<"),
@@ -189,6 +194,7 @@ impl fmt::Display for TokenType {
             TokenType::And => write!(f, "and"),
             TokenType::Not => write!(f, "not"),
             TokenType::Return => write!(f, "return"),
+            TokenType::Stdout => write!(f, "stdout"),
         }
     }
 }
@@ -208,6 +214,7 @@ impl Token {
             "type" => Token::Type,
             "else" => Token::Else,
             "return" => Token::Return,
+            "stdout" => Token::Stdout,
             _ => Token::Identifier(identifier.to_string()),
         }
     }
@@ -229,6 +236,7 @@ impl Token {
             Token::Caret => TokenType::Caret,
             Token::Bang => TokenType::Bang,
             Token::At => TokenType::At,
+            Token::Hashtag => TokenType::Hashtag,
 
             // Comparison
             Token::LessThan => TokenType::LessThan,
@@ -271,6 +279,7 @@ impl Token {
             Token::And => TokenType::And,
             Token::Not => TokenType::Not,
             Token::Return => TokenType::Return,
+            Token::Stdout => TokenType::Stdout,
         }
     }
 }

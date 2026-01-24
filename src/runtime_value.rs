@@ -109,3 +109,17 @@ impl RuntimeValue {
         matches!(self, RuntimeValue::StringLiteral(_))
     }
 }
+
+use std::io::{self, Write};
+
+impl RuntimeValue {
+    pub fn write_to<W: Write>(&self, out: &mut W, strings: &[String]) -> io::Result<()> {
+        match self {
+            RuntimeValue::IntegerLiteral(n) => write!(out, "{n}"),
+            RuntimeValue::FloatLiteral(n) => write!(out, "{n}"),
+            RuntimeValue::BooleanLiteral(b) => write!(out, "{b}"),
+            RuntimeValue::StringLiteral(idx) => out.write_all(strings[*idx].as_bytes()),
+            RuntimeValue::NilLiteral => out.write_all(b"nil"),
+        }
+    }
+}

@@ -61,6 +61,10 @@ pub enum Stmt {
         value: TypeAnnotation,
         span: Span,
     },
+    StdoutLog {
+        log_value: Expression,
+        span: Span,
+    },
 }
 
 impl Expr {

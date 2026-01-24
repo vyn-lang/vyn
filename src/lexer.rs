@@ -219,6 +219,10 @@ impl Lexer {
                 self.advance();
                 Token::At
             }
+            Some('#') => {
+                self.advance();
+                Token::Hashtag
+            }
             Some('^') => {
                 self.advance();
                 Token::Caret

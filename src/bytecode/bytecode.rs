@@ -60,6 +60,9 @@ pub enum OpCode {
 
     // Move operation
     Move = 0x50,
+
+    // Printing
+    LogAddr = 0x51,
 }
 
 impl OpCode {
@@ -108,6 +111,7 @@ impl OpCode {
     pub const LOAD_GLOBAL: u8 = 0x41;
 
     pub const MOVE: u8 = 0x50;
+    pub const LOG_ADDR: u8 = 0x51;
 }
 
 impl fmt::Display for OpCode {
@@ -327,6 +331,12 @@ impl OpCode {
                 name: "MOVE",
                 operands_width: vec![1, 1],
             },
+
+            // Printing
+            OpCode::LogAddr => Definition {
+                name: "LOG_ADDR",
+                operands_width: vec![1],
+            },
         }
     }
 }
@@ -372,6 +382,7 @@ impl ToOpcode for u8 {
             0x40 => OpCode::StoreGlobal,
             0x41 => OpCode::LoadGlobal,
             0x50 => OpCode::Move,
+            0x51 => OpCode::LogAddr,
             _ => unreachable!("Cannot convert byte '0x{:02X}' to an opcode", self),
         }
     }

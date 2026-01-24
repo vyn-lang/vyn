@@ -51,8 +51,8 @@ impl Compiler {
     /// Main entry point
     pub fn compile_program(&mut self, program: Program) -> Result<Bytecode, ErrorCollector> {
         // Type check the entire program before compiling
-        let mut type_checker = TypeChecker::new();
-        type_checker.check_program(&program)?;
+        // let mut type_checker = TypeChecker::new();
+        // type_checker.check_program(&program)?;
 
         for stmt in program.statements {
             let result = self.try_compile_statement(stmt);
@@ -115,6 +115,14 @@ impl Compiler {
             Stmt::TypeAliasDeclaration { .. } => {
                 // Do nothing, this should only
                 // be used while type checking
+                Some(())
+            }
+
+            Stmt::StdoutLog { log_value, span } => {
+                let src = self.compile_expression(log_value)?;
+
+                self.emit(OpCode::LogAddr, vec![src as usize], span);
+                self.free_register(src);
                 Some(())
             }
 

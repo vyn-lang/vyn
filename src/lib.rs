@@ -1,5 +1,6 @@
 pub mod ast;
 pub mod bytecode;
+pub mod cli;
 pub mod compiler;
 pub mod errors;
 pub mod lexer;

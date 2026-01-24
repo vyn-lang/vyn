@@ -7,7 +7,7 @@ use crate::{
 };
 
 pub fn disassemble(bytecode: &Bytecode) {
-    println!("{}", "--== Hydor Assembly ==--".bright_yellow().bold());
+    println!("{}", "--== Vyn Assembly ==--".bright_yellow().bold());
     disassemble_instructions(&bytecode.instructions, &bytecode.debug_info);
     println!();
     disassemble_constants(&bytecode.constants);
@@ -120,7 +120,7 @@ fn is_register_operand(opcode: &OpCode, operand_index: usize) -> bool {
         | OpCode::NotEqual => {
             true // All 3 operands are registers: dest, left, right
         }
-        OpCode::LoadGlobal => {
+        OpCode::LoadGlobal | OpCode::LogAddr => {
             operand_index == 0 // dest_reg (operand 1 is global index)
         }
         OpCode::StoreGlobal => {
