@@ -10,30 +10,15 @@
 
 - **Simple & Clean:** Designed with clarity and ease of use in mind from the ground up.
 
+- **Fast Runtime:** Register-based virtual machine for efficient execution.
+
 ## Current Status
 
 ⚠️ **Early Development** - Vyn is currently in active development. The language is taking shape and much more is on the way!
 
-## Getting Started
+## Documentation
 
-_Installation and usage instructions will be added as the language develops._
-
-### Example
-
-```vyn
-// Coming soon - example Vyn code
-```
-
-## Roadmap
-
-Plans for Vyn's development include:
-
-- Control flow structures (if/else, loops)
-- Functions and procedures
-- Standard library
-- More complete type system
-- Performance optimizations
-- Comprehensive documentation and examples
+For complete documentation including installation, language features, and examples, see the **[full documentation](docs/)**.
 
 ## Building from Source
 
@@ -50,5 +35,5 @@ Vyn is distributed under the MIT License. See [LICENSE](LICENSE) for details.
 ---
 
 <div align="center">
-  Built with ❤️ by <a href="https://github.com/caelondev">caelondev</a>
+  Built with ❤️ by the <a href="https://github.com/vyn-lang">Vyn Team</a>
 </div>
