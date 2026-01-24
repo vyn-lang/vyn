@@ -27,5 +27,5 @@ Let's get started!
 
 After completing this section, check out:
 
-- **[Basics](../basics/)** - Learn about variables, types, and expressions
-- **[Control Flow](../control-flow/)** - Understand if statements and program logic
+- **[Basics](../basics/index.md)** - Learn about variables, types, and expressions
+- **[Control Flow](../control-flow/index.md)** - Understand if statements and program logic

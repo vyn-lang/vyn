@@ -18,11 +18,11 @@
 
 ## Documentation
 
-For complete documentation including installation, language features, and examples, see the **[full documentation](docs/)**.
+For complete documentation including installation, language features, and examples, see the **[full documentation](docs/index.md)**.
 
 ## Building from Source
 
-_Coming soon_
+Check [installation documentation](docs/getting-started/installation.md)
 
 ## Contributing
 

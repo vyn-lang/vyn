@@ -15,9 +15,9 @@ Vyn is designed for clarity, type safety, and portability. Write your code once,
 
 ## Documentation
 
-- **[Getting Started](getting-started/)** - Installation, setup, and your first program
-- **[Basics](basics/)** - Variables, types, operators, and core concepts
-- **[Control Flow](control-flow/)** - Conditionals, loops, and program flow
+- **[Getting Started](getting-started/index.md)** - Installation, setup, and your first program
+- **[Basics](basics/index.md)** - Variables, types, operators, and core concepts
+- **[Control Flow](control-flow/index.md)** - Conditionals, loops, and program flow
 
 _More documentation sections coming soon as features are implemented._
 

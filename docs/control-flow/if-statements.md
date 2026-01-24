@@ -311,8 +311,9 @@ if isPositive {
 ## Next Steps
 
 More control flow features are coming soon, including:
+
 - Loops (while, for)
 - Match statements
 - Break and continue
 
-For now, you can combine if statements with the [Basics](../basics/) you've learned to create powerful conditional logic!
+For now, you can combine if statements with the [Basics](../basics/index.md) you've learned to create powerful conditional logic!

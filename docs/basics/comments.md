@@ -107,4 +107,4 @@ let retryLimit: Int = 5  // Max attempts before giving up
 
 ## Next Steps
 
-You've completed the Basics section! Continue to [Control Flow](../control-flow/) to learn about if statements and program logic.
+You've completed the Basics section! Continue to [Control Flow](../control-flow/index.md) to learn about if statements and program logic.

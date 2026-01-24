@@ -114,4 +114,4 @@ vyn disasm --quiet program.vync
 
 ## Next Steps
 
-Now that you understand the CLI, dive into the [Basics](../basics/) to learn about Vyn's language features.
+Now that you understand the CLI, dive into the [Basics](../basics/index.md) to learn about Vyn's language features.
