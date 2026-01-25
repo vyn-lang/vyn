@@ -334,7 +334,7 @@ impl OpCode {
             },
             OpCode::ArraySet => Definition {
                 name: "ARRAY_SET",
-                operands_width: vec![1, 1, 1], // array_reg, index_reg, value_reg
+                operands_width: vec![1, 4, 1], // array_reg, index_reg, value_reg
             },
             OpCode::ArrayGet => Definition {
                 name: "ARRAY_GET",

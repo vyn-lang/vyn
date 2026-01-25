@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
 use crate::{
-    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16},
+    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16, read_uint32},
     errors::VynError,
     runtime_value::{heap::HeapObject, values::RuntimeValue},
 };
@@ -182,6 +182,40 @@ impl VynVM {
                     unreachable!() // no scopes yet
                 }
 
+                OpCode::ARRAY_NEW_FIXED => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
+                    let length = read_uint32(&self.instructions, self.ip + 2) as usize;
+                    self.ip += 5;
+
+                    let heap_arr = HeapObject::FixedArray {
+                        elements: vec![NIL; length], // Will patched by ARRAY_SET
+                        size: length,
+                    };
+
+                    let arr_idx = self.push_heap(heap_arr);
+                    self.set_register(dest, RuntimeValue::FixedArrayLiteral(arr_idx));
+                }
+                OpCode::ARRAY_SET => {
+                    let arr_reg_idx = read_uint8(&self.instructions, self.ip + 1) as usize;
+                    let index = read_uint32(&self.instructions, self.ip + 2) as usize;
+                    let val_reg_idx = read_uint8(&self.instructions, self.ip + 6) as usize;
+                    self.ip += 6;
+
+                    let value = self.get_register(val_reg_idx).clone();
+
+                    let heap_idx = match self.get_register(arr_reg_idx) {
+                        RuntimeValue::FixedArrayLiteral(idx) => idx,
+                        _ => unreachable!("Expected array in register"),
+                    };
+
+                    match self.get_heap_obj(heap_idx) {
+                        HeapObject::FixedArray { elements, .. } => {
+                            elements[index] = value;
+                        }
+                        _ => unreachable!(),
+                    };
+                }
+
                 OpCode::MOVE => {
                     let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
                     let src = read_uint8(&self.instructions, self.ip + 2) as usize;
@@ -242,6 +276,15 @@ impl VynVM {
         }
 
         occupied
+    }
+
+    pub(crate) fn push_heap(&mut self, value: HeapObject) -> usize {
+        self.heap_table.push(value);
+        self.heap_table.len() - 1
+    }
+
+    pub(crate) fn get_heap_obj(&mut self, idx: usize) -> &mut HeapObject {
+        &mut self.heap_table[idx]
     }
 
     pub fn get_string(&self, idx: usize) -> &str {

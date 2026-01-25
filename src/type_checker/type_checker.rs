@@ -131,6 +131,14 @@ impl TypeChecker {
                     Expr::Identifier(name) => name.clone(),
                     _ => unreachable!("Variable name must be an identifier"),
                 };
+                
+                self.symbol_type_table.declare_identifier(
+                    var_name,
+                    expected_type,
+                    span,
+                    *mutable,
+                    &mut self.errors,
+                )?;
 
                 if expected_type != value_type {
                     self.throw_error(VynError::DeclarationTypeMismatch {
@@ -140,14 +148,6 @@ impl TypeChecker {
                     });
                     return Err(());
                 }
-
-                self.symbol_type_table.declare_identifier(
-                    var_name,
-                    expected_type,
-                    span,
-                    *mutable,
-                    &mut self.errors,
-                )?;
 
                 Ok(())
             }
