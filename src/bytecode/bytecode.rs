@@ -1,123 +1,97 @@
+use byteorder::{BigEndian, ByteOrder};
 use core::fmt;
 
-use byteorder::{BigEndian, ByteOrder};
-use num_enum::IntoPrimitive;
+macro_rules! define_opcodes {
+    (
+        $(
+            $variant:ident, $constant:ident = $value:expr
+        ),* $(,)?
+    ) => {
+        #[derive(Clone, Copy, Debug)]
+        #[repr(u8)]
+        pub enum OpCode {
+            $(
+                $variant = $value,
+            )*
+        }
 
-#[derive(IntoPrimitive, Clone, Copy, Debug)]
-#[repr(u8)]
-pub enum OpCode {
-    Halt = 0x01,
+        impl OpCode {
+            $(
+                pub const $constant: u8 = $value;
+            )*
+        }
 
-    // Load operations
-    LoadConstInt = 0x03,
-    LoadConstFloat = 0x04,
-    LoadString = 0x05,
-    LoadNil = 0x06,
-    LoadTrue = 0x07,
-    LoadFalse = 0x08,
-
-    // Integer arithmetic
-    AddInt = 0x10,
-    SubtractInt = 0x11,
-    MultiplyInt = 0x12,
-    DivideInt = 0x13,
-    ExponentInt = 0x14,
-
-    // Float arithmetic
-    AddFloat = 0x15,
-    SubtractFloat = 0x16,
-    MultiplyFloat = 0x17,
-    DivideFloat = 0x18,
-    ExponentFloat = 0x19,
-
-    // String operations
-    ConcatString = 0x1A,
-
-    // Unary operations
-    NegateInt = 0x20,
-    NegateFloat = 0x21,
-    Not = 0x22,
-
-    // Integer comparisons
-    LessInt = 0x30,
-    LessEqualInt = 0x31,
-    GreaterInt = 0x32,
-    GreaterEqualInt = 0x33,
-
-    // Float comparisons
-    LessFloat = 0x34,
-    LessEqualFloat = 0x35,
-    GreaterFloat = 0x36,
-    GreaterEqualFloat = 0x37,
-
-    // General equality
-    Equal = 0x38,
-    NotEqual = 0x39,
-
-    // Variable operations
-    StoreGlobal = 0x40,
-    LoadGlobal = 0x41,
-
-    // Move operation
-    Move = 0x50,
-
-    // Printing
-    LogAddr = 0x51,
-
-    // Jumps
-    JumpIfFalse = 0x52,
-    JumpUncond = 0x53,
+        impl ToOpcode for u8 {
+            fn to_opcode(self) -> OpCode {
+                match self {
+                    $(
+                        $value => OpCode::$variant,
+                    )*
+                    _ => unreachable!("Cannot convert byte '0x{:02X}' to an opcode", self),
+                }
+            }
+        }
+    };
 }
 
-impl OpCode {
-    // Opcode byte constants for fast VM dispatch
-    pub const HALT: u8 = 0x01;
+// Usage: EnumVariant, CONSTANT_NAME = value
+// Enum variant is used at comp time
+// whilst constant name is used in vm for faster
+// bytecode dispatch
+define_opcodes! {
+    Halt, HALT = 0x01,
 
-    pub const LOAD_CONST_INT: u8 = 0x03;
-    pub const LOAD_CONST_FLOAT: u8 = 0x04;
-    pub const LOAD_STRING: u8 = 0x05;
-    pub const LOAD_NIL: u8 = 0x06;
-    pub const LOAD_TRUE: u8 = 0x07;
-    pub const LOAD_FALSE: u8 = 0x08;
+    LoadConstInt, LOAD_CONST_INT = 0x03,
+    LoadConstFloat, LOAD_CONST_FLOAT = 0x04,
+    LoadString, LOAD_STRING = 0x05,
+    LoadNil, LOAD_NIL = 0x06,
+    LoadTrue, LOAD_TRUE = 0x07,
+    LoadFalse, LOAD_FALSE = 0x08,
 
-    pub const ADD_INT: u8 = 0x10;
-    pub const SUBTRACT_INT: u8 = 0x11;
-    pub const MULTIPLY_INT: u8 = 0x12;
-    pub const DIVIDE_INT: u8 = 0x13;
-    pub const EXPONENT_INT: u8 = 0x14;
+    AddInt, ADD_INT = 0x10,
+    SubtractInt, SUBTRACT_INT = 0x11,
+    MultiplyInt, MULTIPLY_INT = 0x12,
+    DivideInt, DIVIDE_INT = 0x13,
+    ExponentInt, EXPONENT_INT = 0x14,
 
-    pub const ADD_FLOAT: u8 = 0x15;
-    pub const SUBTRACT_FLOAT: u8 = 0x16;
-    pub const MULTIPLY_FLOAT: u8 = 0x17;
-    pub const DIVIDE_FLOAT: u8 = 0x18;
-    pub const EXPONENT_FLOAT: u8 = 0x19;
+    AddFloat, ADD_FLOAT = 0x15,
+    SubtractFloat, SUBTRACT_FLOAT = 0x16,
+    MultiplyFloat, MULTIPLY_FLOAT = 0x17,
+    DivideFloat, DIVIDE_FLOAT = 0x18,
+    ExponentFloat, EXPONENT_FLOAT = 0x19,
 
-    pub const CONCAT_STRING: u8 = 0x1A;
+    ConcatString, CONCAT_STRING = 0x1A,
 
-    pub const NEGATE_INT: u8 = 0x20;
-    pub const NEGATE_FLOAT: u8 = 0x21;
-    pub const NOT: u8 = 0x22;
+    NegateInt, NEGATE_INT = 0x20,
+    NegateFloat, NEGATE_FLOAT = 0x21,
+    Not, NOT = 0x22,
 
-    pub const LESS_INT: u8 = 0x30;
-    pub const LESS_EQUAL_INT: u8 = 0x31;
-    pub const GREATER_INT: u8 = 0x32;
-    pub const GREATER_EQUAL_INT: u8 = 0x33;
+    LessInt, LESS_INT = 0x30,
+    LessEqualInt, LESS_EQUAL_INT = 0x31,
+    GreaterInt, GREATER_INT = 0x32,
+    GreaterEqualInt, GREATER_EQUAL_INT = 0x33,
 
-    pub const LESS_FLOAT: u8 = 0x34;
-    pub const LESS_EQUAL_FLOAT: u8 = 0x35;
-    pub const GREATER_FLOAT: u8 = 0x36;
-    pub const GREATER_EQUAL_FLOAT: u8 = 0x37;
+    LessFloat, LESS_FLOAT = 0x34,
+    LessEqualFloat, LESS_EQUAL_FLOAT = 0x35,
+    GreaterFloat, GREATER_FLOAT = 0x36,
+    GreaterEqualFloat, GREATER_EQUAL_FLOAT = 0x37,
 
-    pub const EQUAL: u8 = 0x38;
-    pub const NOT_EQUAL: u8 = 0x39;
+    Equal, EQUAL = 0x38,
+    NotEqual, NOT_EQUAL = 0x39,
 
-    pub const STORE_GLOBAL: u8 = 0x40;
-    pub const LOAD_GLOBAL: u8 = 0x41;
+    StoreGlobal, STORE_GLOBAL = 0x40,
+    LoadGlobal, LOAD_GLOBAL = 0x41,
 
-    pub const MOVE: u8 = 0x50;
-    pub const LOG_ADDR: u8 = 0x51;
-    pub const JUMP_IF_FALSE: u8 = 0x52;
-    pub const JUMP_UNCOND: u8 = 0x53;
+    Move, MOVE = 0x50,
+    LogAddr, LOG_ADDR = 0x51,
+    JumpIfFalse, JUMP_IF_FALSE = 0x52,
+    JumpUncond, JUMP_UNCOND = 0x53,
+}
+
+impl From<OpCode> for u8 {
+    fn from(op: OpCode) -> u8 {
+        op as u8
+    }
 }
 
 impl fmt::Display for OpCode {
@@ -151,7 +125,6 @@ pub struct Definition {
 pub type Instructions = Vec<u8>;
 
 impl OpCode {
-    /// Create a new instruction with operands
     pub fn make(opcode: OpCode, operands: Vec<usize>) -> Instructions {
         let definition = OpCode::get_definition(opcode);
         let mut instruction_length = 1;
@@ -161,7 +134,7 @@ impl OpCode {
         }
 
         let mut instructions: Instructions = vec![0; instruction_length];
-        instructions[0] = opcode.into();
+        instructions[0] = opcode as u8;
 
         let mut offset = 1;
         for (i, operand) in operands.iter().enumerate() {
@@ -187,7 +160,7 @@ impl OpCode {
         let opcode = instructions[position].to_opcode();
         let definition = OpCode::get_definition(opcode);
 
-        let mut offset = position + 1; // Skip opcode byte
+        let mut offset = position + 1;
 
         for (i, width) in definition.operands_width.iter().enumerate() {
             match width {
@@ -205,8 +178,6 @@ impl OpCode {
                 name: "HALT",
                 operands_width: vec![],
             },
-
-            // Load operations
             OpCode::LoadConstInt => Definition {
                 name: "LOAD_CONST_INT",
                 operands_width: vec![1, 2],
@@ -231,8 +202,6 @@ impl OpCode {
                 name: "LOAD_FALSE",
                 operands_width: vec![1],
             },
-
-            // Integer arithmetic
             OpCode::AddInt => Definition {
                 name: "ADD_INT",
                 operands_width: vec![1, 1, 1],
@@ -253,8 +222,6 @@ impl OpCode {
                 name: "EXP_INT",
                 operands_width: vec![1, 1, 1],
             },
-
-            // Float arithmetic
             OpCode::AddFloat => Definition {
                 name: "ADD_FLOAT",
                 operands_width: vec![1, 1, 1],
@@ -275,14 +242,10 @@ impl OpCode {
                 name: "EXP_FLOAT",
                 operands_width: vec![1, 1, 1],
             },
-
-            // String operations
             OpCode::ConcatString => Definition {
                 name: "CONCAT_STRING",
                 operands_width: vec![1, 1, 1],
             },
-
-            // Unary operations
             OpCode::NegateInt => Definition {
                 name: "NEGATE_INT",
                 operands_width: vec![1, 1],
@@ -295,8 +258,6 @@ impl OpCode {
                 name: "NOT",
                 operands_width: vec![1, 1],
             },
-
-            // Integer comparisons
             OpCode::LessInt => Definition {
                 name: "LESS_INT",
                 operands_width: vec![1, 1, 1],
@@ -313,8 +274,6 @@ impl OpCode {
                 name: "GREATER_EQUAL_INT",
                 operands_width: vec![1, 1, 1],
             },
-
-            // Float comparisons
             OpCode::LessFloat => Definition {
                 name: "LESS_FLOAT",
                 operands_width: vec![1, 1, 1],
@@ -331,8 +290,6 @@ impl OpCode {
                 name: "GREATER_EQUAL_FLOAT",
                 operands_width: vec![1, 1, 1],
             },
-
-            // General equality
             OpCode::Equal => Definition {
                 name: "EQUAL",
                 operands_width: vec![1, 1, 1],
@@ -341,8 +298,6 @@ impl OpCode {
                 name: "NOT_EQUAL",
                 operands_width: vec![1, 1, 1],
             },
-
-            // Variable operations
             OpCode::StoreGlobal => Definition {
                 name: "STORE_GLOBAL",
                 operands_width: vec![2, 1],
@@ -351,20 +306,14 @@ impl OpCode {
                 name: "LOAD_GLOBAL",
                 operands_width: vec![1, 2],
             },
-
-            // Move
             OpCode::Move => Definition {
                 name: "MOVE",
                 operands_width: vec![1, 1],
             },
-
-            // Printing
             OpCode::LogAddr => Definition {
                 name: "LOG_ADDR",
                 operands_width: vec![1],
             },
-
-            // Jumping
             OpCode::JumpIfFalse => Definition {
                 name: "JUMP_IF_FALSE",
                 operands_width: vec![1, 2],
@@ -379,51 +328,6 @@ impl OpCode {
 
 pub trait ToOpcode {
     fn to_opcode(self) -> OpCode;
-}
-
-impl ToOpcode for u8 {
-    fn to_opcode(self) -> OpCode {
-        match self {
-            0x01 => OpCode::Halt,
-            0x03 => OpCode::LoadConstInt,
-            0x04 => OpCode::LoadConstFloat,
-            0x05 => OpCode::LoadString,
-            0x06 => OpCode::LoadNil,
-            0x07 => OpCode::LoadTrue,
-            0x08 => OpCode::LoadFalse,
-            0x10 => OpCode::AddInt,
-            0x11 => OpCode::SubtractInt,
-            0x12 => OpCode::MultiplyInt,
-            0x13 => OpCode::DivideInt,
-            0x14 => OpCode::ExponentInt,
-            0x15 => OpCode::AddFloat,
-            0x16 => OpCode::SubtractFloat,
-            0x17 => OpCode::MultiplyFloat,
-            0x18 => OpCode::DivideFloat,
-            0x19 => OpCode::ExponentFloat,
-            0x1A => OpCode::ConcatString,
-            0x20 => OpCode::NegateInt,
-            0x21 => OpCode::NegateFloat,
-            0x22 => OpCode::Not,
-            0x30 => OpCode::LessInt,
-            0x31 => OpCode::LessEqualInt,
-            0x32 => OpCode::GreaterInt,
-            0x33 => OpCode::GreaterEqualInt,
-            0x34 => OpCode::LessFloat,
-            0x35 => OpCode::LessEqualFloat,
-            0x36 => OpCode::GreaterFloat,
-            0x37 => OpCode::GreaterEqualFloat,
-            0x38 => OpCode::Equal,
-            0x39 => OpCode::NotEqual,
-            0x40 => OpCode::StoreGlobal,
-            0x41 => OpCode::LoadGlobal,
-            0x50 => OpCode::Move,
-            0x51 => OpCode::LogAddr,
-            0x52 => OpCode::JumpIfFalse,
-            0x53 => OpCode::JumpUncond,
-            _ => unreachable!("Cannot convert byte '0x{:02X}' to an opcode", self),
-        }
-    }
 }
 
 #[inline]

@@ -1,0 +1,8 @@
+let age: Int = 18
+
+if age >= 18 {
+    let age: Int = 200;
+    stdout# "Adult"
+} else {
+    stdout# "Minor"
+}
