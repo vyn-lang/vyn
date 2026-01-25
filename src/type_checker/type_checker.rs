@@ -4,6 +4,7 @@ use crate::{
         type_annotation::TypeAnnotation,
     },
     errors::{ErrorCollector, VynError},
+    tokens::TokenType,
     type_checker::symbol_type_table::SymbolTypeTable,
     utils::throw_error,
 };
@@ -18,17 +19,21 @@ pub enum Type {
     String,
     Nil,
     Identifier,
+    FixedArray(Box<Type>, usize),
 }
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Type::Integer => write!(f, "Integer"),
+            Type::Integer => write!(f, "Int"),
             Type::Float => write!(f, "Float"),
             Type::Bool => write!(f, "Bool"),
             Type::String => write!(f, "String"),
             Type::Nil => write!(f, "Nil"),
             Type::Identifier => write!(f, "Identifier"),
+            Type::FixedArray(t, s) => {
+                write!(f, "[{}]{}", s, t)
+            }
         }
     }
 }
@@ -40,6 +45,40 @@ impl Type {
             TypeAnnotation::IntegerType => Self::Integer,
             TypeAnnotation::FloatType => Self::Float,
             TypeAnnotation::BooleanType => Self::Bool,
+            TypeAnnotation::FixedArrayType(ta, size_expr) => {
+                let t = Self::from_anotated_type(ta.as_ref());
+                let size = Self::evaluate_const_size(size_expr);
+                Type::FixedArray(Box::new(t), size)
+            }
+        }
+    }
+
+    fn evaluate_const_size(expr: &Expression) -> usize {
+        match &expr.node {
+            Expr::IntegerLiteral(n) if *n > 0 => *n as usize,
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+            } => {
+                let left_val = Self::evaluate_const_size(left);
+                let right_val = Self::evaluate_const_size(right);
+
+                match operator.get_token_type() {
+                    TokenType::Plus => left_val + right_val,
+                    TokenType::Minus => left_val.saturating_sub(right_val),
+                    TokenType::Asterisk => left_val * right_val,
+                    TokenType::Slash => {
+                        if right_val != 0 {
+                            left_val / right_val
+                        } else {
+                            0
+                        }
+                    }
+                    _ => 0,
+                }
+            }
+            _ => 0,
         }
     }
 }
@@ -131,24 +170,17 @@ impl TypeChecker {
             }
 
             Stmt::Block { statements } => {
-                let parent_table = mem::replace(
-                    &mut self.symbol_type_table,
-                    SymbolTypeTable::new(), // temporary placeholder
-                );
+                let parent_table =
+                    mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new());
 
-                // Create child scope from parent
                 self.symbol_type_table = parent_table.enter_scope();
 
                 for stmt in statements {
                     let _ = self.check_statement(stmt);
                 }
 
-                // Exit scope - restore parent
-                self.symbol_type_table = mem::replace(
-                    &mut self.symbol_type_table,
-                    SymbolTypeTable::new(), // temporary placeholder
-                )
-                .exit_scope();
+                self.symbol_type_table =
+                    mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new()).exit_scope();
 
                 Ok(())
             }
@@ -185,6 +217,34 @@ impl TypeChecker {
             Expr::BooleanLiteral(_) => Ok(Type::Bool),
             Expr::StringLiteral(_) => Ok(Type::String),
             Expr::NilLiteral => Ok(Type::Nil),
+            Expr::ArrayLiteral { elements } => {
+                if elements.is_empty() {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![],
+                        found: Type::Nil,
+                        span,
+                    });
+                    return Err(());
+                }
+
+                // Check first element to determine array type
+                let first_type = self.check_expression(&elements[0])?;
+
+                // Verify all elements have the same type
+                for elem in &elements[1..] {
+                    let elem_type = self.check_expression(elem)?;
+                    if elem_type != first_type {
+                        self.throw_error(VynError::TypeMismatch {
+                            expected: vec![first_type.clone()],
+                            found: elem_type,
+                            span: elem.span,
+                        });
+                        return Err(());
+                    }
+                }
+
+                Ok(Type::FixedArray(Box::new(first_type), elements.len()))
+            }
 
             Expr::Identifier(name) => {
                 let ident =

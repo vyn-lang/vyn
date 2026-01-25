@@ -6,7 +6,7 @@ use crate::{
         type_annotation::TypeAnnotation,
     },
     errors::VynError,
-    parser::parser::Parser,
+    parser::{lookups::Precedence, parser::Parser},
     tokens::TokenType,
 };
 
@@ -27,13 +27,24 @@ impl Parser {
         let current_token = self.current_token();
         let current_token_type = current_token.token.get_token_type();
 
+        // Dispatch table for special type syntax
+        match current_token_type {
+            TokenType::LeftBracket => self.parse_array_type(),
+            _ => self.parse_simple_type(),
+        }
+    }
+
+    fn parse_simple_type(&mut self) -> Option<TypeAnnotation> {
+        let current_token = self.current_token();
+        let current_token_type = current_token.token.get_token_type();
+
         // check if is identifier
         if current_token_type != TokenType::Identifier {
             self.errors.add(VynError::ExpectedType {
                 got: current_token_type,
                 span: current_token.span,
             });
-            self.advance(); // consume bad tokn
+            self.advance(); // consume bad token
             return None;
         }
 
@@ -56,6 +67,26 @@ impl Parser {
         };
 
         type_annotation
+    }
+
+    fn parse_array_type(&mut self) -> Option<TypeAnnotation> {
+        if !self.expect(TokenType::LeftBracket) {
+            return None;
+        }
+
+        // TODO: Right now, this assumes ALL arrays are fixed
+        // in size
+        let size = self.try_parse_expression(Precedence::Default.into())?;
+
+        if !self.expect(TokenType::RightBracket) {
+            return None;
+        }
+
+        let arr_type = self.try_parse_type()?;
+
+        let arr = TypeAnnotation::FixedArrayType(Box::new(arr_type), size);
+
+        Some(arr)
     }
 
     pub fn enroll_type_alias(

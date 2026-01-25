@@ -5,3 +5,4 @@ pub mod debug_info;
 pub mod disassembler;
 pub mod symbol_table;
 pub mod unary;
+pub mod helpers;

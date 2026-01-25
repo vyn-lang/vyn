@@ -70,6 +70,21 @@ pub enum Token {
     Stdout,
 }
 
+impl fmt::Display for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            // Literals - show the actual value
+            Token::Integer(n) => write!(f, "{}", n),
+            Token::Float(fl) => write!(f, "{}", fl),
+            Token::String(s) => write!(f, "\"{}\"", s),
+            Token::Identifier(name) => write!(f, "{}", name),
+
+            // For everything else, delegate to TokenType's Display
+            _ => write!(f, "{}", self.get_token_type()),
+        }
+    }
+}
+
 #[derive(Eq, PartialEq, Hash, Debug, Clone)]
 pub enum TokenType {
     // Literals

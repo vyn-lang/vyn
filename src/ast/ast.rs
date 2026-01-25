@@ -3,6 +3,7 @@ use crate::{
     tokens::Token,
     utils::{Span, Spanned},
 };
+use std::fmt::{Display, Formatter, Result as FmtResult};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
@@ -27,6 +28,9 @@ pub enum Expr {
     StringLiteral(String),
     Identifier(String),
     NilLiteral,
+    ArrayLiteral {
+        elements: Vec<Box<Expression>>,
+    },
 
     Unary {
         operator: Token,
@@ -42,6 +46,53 @@ pub enum Expr {
         identifier: Box<Expression>,
         new_value: Box<Expression>,
     },
+}
+
+impl Display for Expression {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{}", self.node)
+    }
+}
+
+impl Display for Expr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            Expr::IntegerLiteral(n) => write!(f, "{}", n),
+            Expr::FloatLiteral(fl) => write!(f, "{}", fl),
+            Expr::BooleanLiteral(b) => write!(f, "{}", b),
+            Expr::StringLiteral(s) => write!(f, "\"{}\"", s),
+            Expr::Identifier(name) => write!(f, "{}", name),
+            Expr::NilLiteral => write!(f, "nil"),
+            Expr::ArrayLiteral { elements } => {
+                let v = elements
+                    .iter()
+                    .map(|e| format!("{}", e))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                write!(f, "[{}]", v)
+            }
+
+            Expr::Unary { operator, right } => {
+                write!(f, "({}{})", operator, right)
+            }
+
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+            } => {
+                write!(f, "({} {} {})", left, operator, right)
+            }
+
+            Expr::VariableAssignment {
+                identifier,
+                new_value,
+            } => {
+                write!(f, "{} = {}", identifier, new_value)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -50,6 +50,7 @@ impl Parser {
         parser.register_nud(TokenType::Identifier, Parser::parse_identifier_literal);
         parser.register_nud(TokenType::String, Parser::parse_string_literal);
         parser.register_nud(TokenType::Nil, Parser::parse_nil_literal);
+        parser.register_nud(TokenType::LeftBracket, Parser::parse_array_literal);
 
         parser.register_nud(TokenType::Minus, Parser::parse_unary_expr);
         parser.register_nud(TokenType::Not, Parser::parse_unary_expr);
@@ -364,6 +365,37 @@ impl Parser {
         let expr = Expr::NilLiteral.spanned(token_info.span);
 
         self.advance();
+        Some(expr)
+    }
+
+    pub fn parse_array_literal(&mut self) -> Option<Expression> {
+        let lb_token_info = self.current_token().clone();
+
+        self.advance();
+
+        let mut elements: Vec<Box<Expression>> = Vec::new();
+
+        while self.current_token_type() != TokenType::RightBracket {
+            let e = self.try_parse_expression(Precedence::Default.into())?;
+            elements.push(Box::new(e));
+
+            if self.current_token_type() == TokenType::Comma {
+                self.advance();
+                self.skip_newlines_in_delimiters();
+            }
+        }
+
+        self.advance();
+
+        let rb_token_info = self.current_token().clone();
+
+        let full_span = Span {
+            line: lb_token_info.span.line,
+            start_column: lb_token_info.span.start_column,
+            end_column: rb_token_info.span.end_column,
+        };
+
+        let expr = Expr::ArrayLiteral { elements }.spanned(full_span);
         Some(expr)
     }
 

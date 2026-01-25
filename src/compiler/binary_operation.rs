@@ -44,8 +44,8 @@ impl Compiler {
             }
         }
 
-        let left_reg = self.compile_expression(left)?;
-        let right_reg = self.compile_expression(right.clone())?;
+        let left_reg = self.compile_expression(left, None)?;
+        let right_reg = self.compile_expression(right.clone(), None)?;
 
         let dest_reg = self.allocate_register()?;
 

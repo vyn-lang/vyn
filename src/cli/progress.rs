@@ -25,7 +25,6 @@ impl ProgressBar {
 
         // Progress visualization
         if filled_width == 0 {
-            // All empty - make sure there's enough visual presence
             bar.push_str(
                 &Theme::PROGRESS_EMPTY
                     .repeat(self.width)
@@ -91,7 +90,6 @@ impl ProgressBar {
         // Closing bracket
         bar.push_str(&Theme::BRACKET_CLOSE.white().dimmed().to_string());
 
-        // Optional percentage
         if self.show_percentage {
             let percentage = format!(" {}%", (progress * 100.0) as u8);
             bar.push_str(&percentage.white().dimmed().to_string());

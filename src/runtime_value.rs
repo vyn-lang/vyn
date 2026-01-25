@@ -1,12 +1,14 @@
 use core::fmt;
 use std::fmt::{Display, Formatter};
+use std::io::{self, Write};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RuntimeValue {
     IntegerLiteral(i32),
     FloatLiteral(f64),
     BooleanLiteral(bool),
-    StringLiteral(usize), // Accessed via string table
+    StringLiteral(usize),     // pointer to a string in the string table
+    FixedArrayLiteral(usize), // points to an array in heap table
     NilLiteral,
 }
 
@@ -16,6 +18,7 @@ pub enum RuntimeType {
     Float,
     Boolean,
     String,
+    Array,
     Nil,
 }
 
@@ -26,6 +29,7 @@ impl Display for RuntimeType {
             RuntimeType::Float => write!(f, "Float"),
             RuntimeType::Boolean => write!(f, "Boolean"),
             RuntimeType::String => write!(f, "String"),
+            RuntimeType::Array => write!(f, "Array"),
             RuntimeType::Nil => write!(f, "Nil"),
         }
     }
@@ -38,6 +42,7 @@ impl RuntimeType {
             RuntimeType::Float => "float",
             RuntimeType::Boolean => "boolean",
             RuntimeType::String => "string",
+            RuntimeType::Array => "array",
             RuntimeType::Nil => "nil",
         }
     }
@@ -90,6 +95,7 @@ impl RuntimeValue {
             RuntimeValue::FloatLiteral(_) => RuntimeType::Float,
             RuntimeValue::BooleanLiteral(_) => RuntimeType::Boolean,
             RuntimeValue::StringLiteral(_) => RuntimeType::String,
+            RuntimeValue::FixedArrayLiteral(_) => RuntimeType::Array,
             RuntimeValue::NilLiteral => RuntimeType::Nil,
         }
     }
@@ -110,15 +116,14 @@ impl RuntimeValue {
     }
 }
 
-use std::io::{self, Write};
-
 impl RuntimeValue {
     pub fn write_to<W: Write>(&self, out: &mut W, strings: &[String]) -> io::Result<()> {
         match self {
             RuntimeValue::IntegerLiteral(n) => write!(out, "{n}"),
             RuntimeValue::FloatLiteral(n) => write!(out, "{n}"),
             RuntimeValue::BooleanLiteral(b) => write!(out, "{b}"),
-            RuntimeValue::StringLiteral(idx) => out.write_all(strings[*idx].as_bytes()),
+            RuntimeValue::StringLiteral(idx) => out.write_all(string_table[*idx].as_bytes()),
+            RuntimeValue::FixedArrayLiteral(idx) => out.write_all(heap_table[*idx].as_bytes()),
             RuntimeValue::NilLiteral => out.write_all(b"nil"),
         }
     }

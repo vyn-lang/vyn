@@ -52,7 +52,7 @@ impl Compiler {
         let right_expr = (**right).clone();
         let operand_type = self.get_expr_type(right)?;
 
-        let src_reg = self.compile_expression(right_expr)?;
+        let src_reg = self.compile_expression(right_expr, None)?;
         let dest_reg = self.allocate_register()?;
 
         match operator.get_token_type() {

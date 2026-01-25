@@ -86,6 +86,10 @@ define_opcodes! {
     LogAddr, LOG_ADDR = 0x51,
     JumpIfFalse, JUMP_IF_FALSE = 0x52,
     JumpUncond, JUMP_UNCOND = 0x53,
+
+    ArrayNewFixed, ARRAY_NEW_FIXED = 0x54,
+    ArraySet, ARRAY_SET = 0x55,
+    ArrayGet, ARRAY_GET = 0x56,
 }
 
 impl From<OpCode> for u8 {
@@ -143,6 +147,7 @@ impl OpCode {
             match width {
                 1 => instructions[offset] = *operand as u8,
                 2 => BigEndian::write_u16(&mut instructions[offset..], *operand as u16),
+                4 => BigEndian::write_u32(&mut instructions[offset..], *operand as u32),
                 _ => unreachable!("Cannot make instruction operand with width {width}"),
             }
 
@@ -166,6 +171,7 @@ impl OpCode {
             match width {
                 1 => instructions[offset] = new_operands[i] as u8,
                 2 => BigEndian::write_u16(&mut instructions[offset..], new_operands[i] as u16),
+                4 => BigEndian::write_u32(&mut instructions[offset..], new_operands[i] as u32),
                 _ => unreachable!("Cannot change operand with width {}", width),
             }
             offset += width;
@@ -322,6 +328,18 @@ impl OpCode {
                 name: "JUMP_UNCOND",
                 operands_width: vec![2],
             },
+            OpCode::ArrayNewFixed => Definition {
+                name: "ARRAY_NEW_FIXED",
+                operands_width: vec![1, 4],
+            },
+            OpCode::ArraySet => Definition {
+                name: "ARRAY_SET",
+                operands_width: vec![1, 1, 1], // array_reg, index_reg, value_reg
+            },
+            OpCode::ArrayGet => Definition {
+                name: "ARRAY_GET",
+                operands_width: vec![1, 1, 1], // dest_reg, array_reg, index_reg
+            },
         }
     }
 }
@@ -338,4 +356,9 @@ pub fn read_uint8(instructions: &Instructions, offset: usize) -> u8 {
 #[inline]
 pub fn read_uint16(instructions: &Instructions, offset: usize) -> u16 {
     BigEndian::read_u16(&instructions[offset..offset + 2])
+}
+
+#[inline]
+pub fn read_uint32(instructions: &Instructions, offset: usize) -> u32 {
+    BigEndian::read_u32(&instructions[offset..offset + 4])
 }

@@ -1,4 +1,4 @@
-use std::{collections::HashSet, mem, os::android::raw::stat};
+use std::{collections::HashSet, mem};
 
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
@@ -6,21 +6,20 @@ use crate::{
     compiler::{debug_info::DebugInfo, symbol_table::SymbolTable},
     errors::{ErrorCollector, VynError},
     runtime_value::RuntimeValue,
-    tokens::TokenType,
-    type_checker::type_checker::{Type, TypeChecker},
+    type_checker::type_checker::Type,
     utils::Span,
 };
 
 pub struct Compiler {
-    instructions: Instructions,
-    constants: Vec<RuntimeValue>,
-    string_table: Vec<String>,
-    debug_info: DebugInfo,
+    pub instructions: Instructions,
+    pub constants: Vec<RuntimeValue>,
+    pub string_table: Vec<String>,
+    pub debug_info: DebugInfo,
+    pub symbol_table: SymbolTable,
 
     next_register: u8,
-    free_registers: Vec<u8>, // TODO: These might need a seperate struct
+    free_registers: Vec<u8>,
     pinned_registers: HashSet<u8>,
-    symbol_table: SymbolTable,
     errors: ErrorCollector,
 }
 
@@ -72,7 +71,7 @@ impl Compiler {
 
         match stmt.node {
             Stmt::Expression { expression } => {
-                self.compile_expression(expression)?;
+                self.compile_expression(expression, None)?;
                 Some(())
             }
 
@@ -85,16 +84,18 @@ impl Compiler {
                 let var_name = match identifier.node {
                     Expr::Identifier(n) => n,
                     _ => unreachable!("Variable name must be identifier"),
-                    // unreachable, the parser already checks this
                 };
 
-                let value_reg = self.compile_expression(value)?;
+                let expected_type = Type::from_anotated_type(&annotated_type);
+
+                // Pass the expected type down to compile_expression
+                let value_reg = self.compile_expression(value, Some(&expected_type))?;
                 self.pin_register(value_reg);
 
                 match self.symbol_table.declare_identifier(
                     var_name.clone(),
                     span,
-                    Type::from_anotated_type(&annotated_type),
+                    expected_type,
                     value_reg,
                 ) {
                     Ok(_) => {}
@@ -107,14 +108,10 @@ impl Compiler {
                 Some(())
             }
 
-            Stmt::TypeAliasDeclaration { .. } => {
-                // Do nothing, this should only
-                // be used while type checking
-                Some(())
-            }
+            Stmt::TypeAliasDeclaration { .. } => Some(()),
 
             Stmt::StdoutLog { log_value } => {
-                let src = self.compile_expression(log_value)?;
+                let src = self.compile_expression(log_value, None)?;
 
                 self.emit(OpCode::LogAddr, vec![src as usize], span);
                 self.free_register(src);
@@ -134,13 +131,11 @@ impl Compiler {
                 consequence,
                 alternate,
             } => {
-                let cond_idx = self.compile_expression(condition)?;
+                let cond_idx = self.compile_expression(condition, None)?;
 
-                // Emit jump with placeholder (keep cond_idx for patching later)
                 let jump_false_pos =
                     self.emit(OpCode::JumpIfFalse, vec![cond_idx as usize, 9999], span);
 
-                // NOW free the register since we've emitted the instruction
                 self.free_register(cond_idx);
 
                 self.try_compile_statement(*consequence)?;
@@ -153,10 +148,8 @@ impl Compiler {
                 );
 
                 if let Some(alt) = alternate.as_ref() {
-                    // '9999' is another bogus value to patch
                     let jump_pos = self.emit(OpCode::JumpUncond, vec![9999], span);
 
-                    // Repatch
                     let end_block = self.instructions.len();
                     OpCode::change_operand(
                         &mut self.instructions,
@@ -179,18 +172,14 @@ impl Compiler {
                 });
                 None
             }
-
-            unknown => {
-                self.throw_error(VynError::UnknownAST {
-                    node: unknown.to_node(),
-                    span,
-                });
-                None
-            }
         }
     }
 
-    pub(crate) fn compile_expression(&mut self, expr: Expression) -> Option<u8> {
+    pub(crate) fn compile_expression(
+        &mut self,
+        expr: Expression,
+        expected_type: Option<&Type>,
+    ) -> Option<u8> {
         let span = expr.span;
 
         match expr.node {
@@ -242,9 +231,6 @@ impl Compiler {
             }
 
             Expr::Identifier(name) => {
-                // This does a direct mapping
-                // it takes the value of the variable based on the
-                // register and returns that value
                 let symbol = match self.symbol_table.resolve_identifier(&name, span) {
                     Ok(s) => s,
                     Err(he) => {
@@ -253,7 +239,6 @@ impl Compiler {
                     }
                 };
 
-                // Just return the register where the value of variable lives
                 Some(symbol.register)
             }
 
@@ -290,7 +275,7 @@ impl Compiler {
                     }
                 };
 
-                let src_reg = self.compile_expression(*new_value)?;
+                let src_reg = self.compile_expression(*new_value, None)?;
 
                 self.emit(
                     OpCode::Move,
@@ -301,61 +286,56 @@ impl Compiler {
                 self.free_register(src_reg);
                 Some(dest_reg)
             }
+
+            Expr::ArrayLiteral { elements } => {
+                self.compile_array_literal(elements, expected_type, span)
+            }
         }
     }
 
-    pub(crate) fn get_expr_type(&mut self, expr: &Expression) -> Option<Type> {
-        match &expr.node {
-            Expr::IntegerLiteral(_) => Some(Type::Integer),
-            Expr::FloatLiteral(_) => Some(Type::Float),
-            Expr::BooleanLiteral(_) => Some(Type::Bool),
-            Expr::StringLiteral(_) => Some(Type::String),
-            Expr::NilLiteral => Some(Type::Nil),
-            Expr::Identifier(n) => {
-                let symbol = self.symbol_table.resolve_identifier(n, expr.span);
-                match symbol {
-                    Ok(s) => Some(s.symbol_type.clone()),
-                    Err(he) => {
-                        self.throw_error(he);
-                        None
-                    }
+    fn compile_array_literal(
+        &mut self,
+        elements: Vec<Box<Expression>>,
+        expected_type: Option<&Type>,
+        span: Span,
+    ) -> Option<u8> {
+        match expected_type {
+            Some(Type::FixedArray(t, size)) => {
+                let dest = self.allocate_register()?;
+
+                self.emit(OpCode::ArrayNewFixed, vec![dest as usize, *size], span);
+
+                for (i, elem) in elements.iter().enumerate() {
+                    let elem_reg = self.compile_expression(*elem.clone(), Some(t))?;
+
+                    self.emit(
+                        OpCode::ArraySet,
+                        vec![dest as usize, i, elem_reg as usize],
+                        span,
+                    );
+
+                    self.free_register(elem_reg);
                 }
+
+                Some(dest)
             }
 
-            Expr::Unary { right, operator } => match operator.get_token_type() {
-                TokenType::Minus => self.get_expr_type(right),
-                TokenType::Not => Some(Type::Bool),
-                _ => unreachable!(),
-            },
-
-            Expr::BinaryOperation { left, operator, .. } => match operator.get_token_type() {
-                TokenType::Plus
-                | TokenType::Minus
-                | TokenType::Asterisk
-                | TokenType::Slash
-                | TokenType::Caret => self.get_expr_type(left),
-
-                TokenType::LessThan
-                | TokenType::LessThanEqual
-                | TokenType::GreaterThan
-                | TokenType::GreaterThanEqual
-                | TokenType::Equal
-                | TokenType::NotEqual => Some(Type::Bool),
-
-                _ => unreachable!(),
-            },
-
-            _ => unreachable!("Unknown expression type\n\n{:#?}", expr.node),
+            _ => {
+                self.throw_error(VynError::TypeMismatch {
+                    expected: vec![],
+                    found: Type::Nil,
+                    span,
+                });
+                None
+            }
         }
     }
 
     pub(crate) fn allocate_register(&mut self) -> Option<u8> {
-        // First, try to reuse a freed register
         if let Some(reg) = self.free_registers.pop() {
             return Some(reg);
         }
 
-        // Otherwise allocate a new one
         if self.next_register >= u8::MAX {
             self.throw_error(VynError::RegisterOverflow {
                 span: Span::default(),
@@ -389,7 +369,6 @@ impl Compiler {
         self.free_register(reg);
     }
 
-    /// Add a string to the string table (with deduplication)
     pub(crate) fn intern_string(&mut self, s: String) -> usize {
         if let Some(pos) = self.string_table.iter().position(|existing| existing == &s) {
             return pos;
@@ -412,7 +391,6 @@ impl Compiler {
         }
     }
 
-    /// Add a constant to the constants table
     pub(crate) fn add_constant(&mut self, value: RuntimeValue) -> usize {
         if let Some(pos) = self
             .constants
@@ -426,26 +404,22 @@ impl Compiler {
         self.constants.len() - 1
     }
 
-    /// Record a compilation error
     pub(crate) fn throw_error(&mut self, error: VynError) {
         self.errors.add(error);
     }
 
-    /// Emit an instruction with span tracking
     pub(crate) fn emit(&mut self, opcode: OpCode, operands: Vec<usize>, span: Span) -> usize {
         let instruction = OpCode::make(opcode, operands);
         let position = self.add_instruction(instruction, span);
         position
     }
 
-    /// Add instruction bytes and track their span
     pub(crate) fn add_instruction(&mut self, instruction: Instructions, span: Span) -> usize {
         let position = self.instructions.len();
 
         for byte in instruction {
             let offset = self.instructions.len();
 
-            // Compressed span tracking (only record when values change)
             if self.should_add_line_change(span.line) {
                 self.debug_info.line_changes.push((offset, span.line));
             }

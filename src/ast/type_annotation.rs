@@ -1,12 +1,15 @@
 use core::fmt;
 use std::fmt::{Display, Formatter};
 
+use crate::ast::ast::Expression;
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeAnnotation {
     StringType,
     IntegerType,
     FloatType,
     BooleanType,
+    FixedArrayType(Box<TypeAnnotation>, Expression),
 }
 
 impl Display for TypeAnnotation {
@@ -16,6 +19,8 @@ impl Display for TypeAnnotation {
             TypeAnnotation::IntegerType => write!(f, "Integer"),
             TypeAnnotation::FloatType => write!(f, "Float"),
             TypeAnnotation::BooleanType => write!(f, "Bool"),
+
+            TypeAnnotation::FixedArrayType(ta, s) => write!(f, "[{}]{}", s, ta),
         }
     }
 }

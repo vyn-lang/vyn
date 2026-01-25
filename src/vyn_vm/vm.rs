@@ -20,7 +20,7 @@ pub struct VynVM {
     // Constant pool
     pub(crate) constants: Vec<RuntimeValue>,
     // String table (since strings are stored by index)
-    pub(crate) strings: Vec<String>,
+    pub(crate) string_table: Vec<String>,
     // Program bytecode
     pub(crate) instructions: Instructions,
     // Instruction pointer
@@ -31,12 +31,12 @@ impl VynVM {
     pub fn new(
         instructions: Instructions,
         constants: Vec<RuntimeValue>,
-        strings: Vec<String>,
+        string_table: Vec<String>,
     ) -> Self {
         Self {
             registers: [NIL; MAX_REGISTERS], // Initialize all to Nil singleton
             constants,
-            strings,
+            string_table,
             instructions,
             ip: 0,
         }

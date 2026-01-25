@@ -60,7 +60,6 @@ impl PhaseTracker {
         let progress_bar = if show_progress && !quiet {
             let pb = IndicatifBar::new(100);
 
-            // Custom style with your theme
             let style = ProgressStyle::default_bar()
                 .template("{msg}\nCompiling {prefix} [{bar:40.cyan/blue}] {pos}%")
                 .unwrap()
@@ -164,7 +163,6 @@ impl PhaseTracker {
     }
 
     pub fn clear_display(&mut self) {
-        // This is the critical fix - actually clear and remove the progress bar
         if let Some(pb) = &self.progress_bar {
             pb.finish_and_clear();
         }

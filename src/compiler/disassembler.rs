@@ -1,7 +1,7 @@
 use colored::*;
 
 use crate::{
-    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16},
+    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16, read_uint32},
     compiler::{compiler::Bytecode, debug_info::DebugInfo},
     runtime_value::RuntimeValue,
 };
@@ -71,6 +71,21 @@ fn disassemble_instructions(instructions: &Instructions, debug_info: &DebugInfo)
                         }
                         offset += 2;
                     }
+                    4 => {
+                        let operand = read_uint32(instructions, offset);
+
+                        // Pretty print based on what the operand represents
+                        if is_constant_index(&opcode, i) {
+                            print!("{}", format!("const[{}]", operand).yellow());
+                        } else if is_string_index(&opcode, i) {
+                            print!("{}", format!("str[{}]", operand).magenta());
+                        } else if is_global_index(&opcode, i) {
+                            print!("{}", format!("global[{}]", operand).blue());
+                        } else {
+                            print!("{}", format!("{:#04x}", operand).white());
+                        }
+                        offset += 4;
+                    }
                     _ => unreachable!("Unexpected operand width: {}", width),
                 }
             }
@@ -128,6 +143,18 @@ fn is_register_operand(opcode: &OpCode, operand_index: usize) -> bool {
         }
 
         OpCode::JumpIfFalse | OpCode::JumpUncond => true,
+
+        OpCode::ArrayNewFixed => {
+            operand_index == 0 // first operand is dest
+        }
+
+        OpCode::ArraySet => {
+            // operand 0: array_reg (register)
+            // operand 1: index (LITERAL, not register!)
+            // operand 2: value_reg (register)
+            operand_index == 0 || operand_index == 2
+        }
+        OpCode::ArrayGet => true,
 
         OpCode::Halt => false,
     }
