@@ -1,5 +1,5 @@
 use crate::{
-    bytecode::bytecode::read_uint8, errors::VynError, runtime_value::RuntimeValue,
+    bytecode::bytecode::read_uint8, errors::VynError, runtime_value::values::RuntimeValue,
     vyn_vm::vm::VynVM,
 };
 

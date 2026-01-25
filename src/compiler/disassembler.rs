@@ -3,7 +3,7 @@ use colored::*;
 use crate::{
     bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16, read_uint32},
     compiler::{compiler::Bytecode, debug_info::DebugInfo},
-    runtime_value::RuntimeValue,
+    runtime_value::values::RuntimeValue,
 };
 
 pub fn disassemble(bytecode: &Bytecode) {

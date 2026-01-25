@@ -5,7 +5,7 @@ use crate::{
     bytecode::bytecode::{Instructions, OpCode},
     compiler::{debug_info::DebugInfo, symbol_table::SymbolTable},
     errors::{ErrorCollector, VynError},
-    runtime_value::RuntimeValue,
+    runtime_value::values::RuntimeValue,
     type_checker::type_checker::Type,
     utils::Span,
 };

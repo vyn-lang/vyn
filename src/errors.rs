@@ -1,9 +1,6 @@
 use crate::{
-    ast::ast::{Expr, Expression, Node},
-    runtime_value::RuntimeType,
-    tokens::TokenType,
-    type_checker::type_checker::Type,
-    utils::Span,
+    ast::ast::Node, runtime_value::values::RuntimeType, tokens::TokenType,
+    type_checker::type_checker::Type, utils::Span,
 };
 use colored::*;
 

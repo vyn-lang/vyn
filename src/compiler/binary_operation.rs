@@ -3,7 +3,7 @@ use crate::{
     bytecode::bytecode::OpCode,
     compiler::compiler::Compiler,
     errors::VynError,
-    runtime_value::RuntimeValue,
+    runtime_value::values::RuntimeValue,
     tokens::{Token, TokenType},
     type_checker::type_checker::Type,
     utils::Span,

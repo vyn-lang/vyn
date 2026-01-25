@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use crate::{
     bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16},
     errors::VynError,
-    runtime_value::RuntimeValue,
+    runtime_value::{heap::HeapObject, values::RuntimeValue},
 };
 
 // Singletons for common values
@@ -19,8 +19,8 @@ pub struct VynVM {
     pub(crate) registers: Registers,
     // Constant pool
     pub(crate) constants: Vec<RuntimeValue>,
-    // String table (since strings are stored by index)
-    pub(crate) string_table: Vec<String>,
+
+    pub(crate) heap_table: Vec<HeapObject>,
     // Program bytecode
     pub(crate) instructions: Instructions,
     // Instruction pointer
@@ -33,10 +33,17 @@ impl VynVM {
         constants: Vec<RuntimeValue>,
         string_table: Vec<String>,
     ) -> Self {
+        let mut heap_table: Vec<HeapObject> = Vec::with_capacity(string_table.len());
+
+        for s in string_table {
+            let string = HeapObject::String(s);
+            heap_table.push(string);
+        }
+
         Self {
             registers: [NIL; MAX_REGISTERS], // Initialize all to Nil singleton
             constants,
-            string_table,
+            heap_table,
             instructions,
             ip: 0,
         }
@@ -192,7 +199,7 @@ impl VynVM {
                     let stdout = io::stdout();
                     let mut out = stdout.lock();
 
-                    value.write_to(&mut out, &self.strings).unwrap();
+                    value.write_to(&mut out, &self.heap_table).unwrap();
                     out.write_all(b"\n").unwrap();
                 }
 
@@ -214,8 +221,9 @@ impl VynVM {
     }
 
     pub(crate) fn intern_string(&mut self, str: String) -> usize {
-        self.strings.push(str);
-        self.strings.len() - 1
+        let string = HeapObject::String(str);
+        self.heap_table.push(string);
+        self.heap_table.len() - 1
     }
 
     // For debugging
@@ -237,6 +245,9 @@ impl VynVM {
     }
 
     pub fn get_string(&self, idx: usize) -> &str {
-        &self.strings[idx]
+        match &self.heap_table[idx] {
+            HeapObject::String(s) => s.as_str(),
+            _ => unreachable!(),
+        }
     }
 }

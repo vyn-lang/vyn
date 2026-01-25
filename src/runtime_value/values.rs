@@ -2,6 +2,8 @@ use core::fmt;
 use std::fmt::{Display, Formatter};
 use std::io::{self, Write};
 
+use crate::runtime_value::heap::HeapObject;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RuntimeValue {
     IntegerLiteral(i32),
@@ -117,13 +119,35 @@ impl RuntimeValue {
 }
 
 impl RuntimeValue {
-    pub fn write_to<W: Write>(&self, out: &mut W, strings: &[String]) -> io::Result<()> {
+    pub fn write_to<W: Write>(&self, out: &mut W, heap_table: &[HeapObject]) -> io::Result<()> {
         match self {
             RuntimeValue::IntegerLiteral(n) => write!(out, "{n}"),
             RuntimeValue::FloatLiteral(n) => write!(out, "{n}"),
             RuntimeValue::BooleanLiteral(b) => write!(out, "{b}"),
-            RuntimeValue::StringLiteral(idx) => out.write_all(string_table[*idx].as_bytes()),
-            RuntimeValue::FixedArrayLiteral(idx) => out.write_all(heap_table[*idx].as_bytes()),
+            RuntimeValue::StringLiteral(idx) => {
+                let value = match &heap_table[*idx] {
+                    HeapObject::String(s) => s,
+                    _ => unreachable!(),
+                };
+                out.write_all(value.as_bytes())
+            }
+            RuntimeValue::FixedArrayLiteral(idx) => {
+                let elements = match &heap_table[*idx] {
+                    HeapObject::FixedArray { elements, .. } => elements,
+                    _ => unreachable!(),
+                };
+
+                out.write_all(b"[")?;
+
+                for (i, elem) in elements.iter().enumerate() {
+                    elem.write_to(out, heap_table)?;
+                    if i != elements.len() - 1 {
+                        out.write_all(b", ")?;
+                    }
+                }
+
+                out.write_all(b"]")
+            }
             RuntimeValue::NilLiteral => out.write_all(b"nil"),
         }
     }

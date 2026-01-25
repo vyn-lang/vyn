@@ -1,8 +1,7 @@
 use crate::{
     bytecode::bytecode::{OpCode, read_uint8},
     errors::VynError,
-    runtime_value::RuntimeValue,
-    utils::Span,
+    runtime_value::values::RuntimeValue,
     vyn_vm::vm::VynVM,
 };
 
