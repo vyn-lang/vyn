@@ -47,38 +47,62 @@ impl Type {
             TypeAnnotation::BooleanType => Self::Bool,
             TypeAnnotation::FixedArrayType(ta, size_expr) => {
                 let t = Self::from_anotated_type(ta.as_ref());
-                let size = Self::evaluate_const_size(size_expr);
+                let size = Self::evaluate_const_expr(size_expr)
+                    .and_then(|v| if v >= 0 { Some(v as usize) } else { None })
+                    .unwrap_or(0);
                 Type::FixedArray(Box::new(t), size)
             }
         }
     }
 
-    fn evaluate_const_size(expr: &Expression) -> usize {
+    /// Evaluates a constant expression to an i64 value
+    /// Returns None if the expression cannot be evaluated at compile time
+    fn evaluate_const_expr(expr: &Expression) -> Option<i32> {
         match &expr.node {
-            Expr::IntegerLiteral(n) if *n > 0 => *n as usize,
+            Expr::IntegerLiteral(n) => Some(*n),
+
+            Expr::Unary { operator, right } => {
+                let right_val = Self::evaluate_const_expr(right)?;
+
+                match operator.get_token_type() {
+                    TokenType::Minus => Some(-right_val),
+                    TokenType::Plus => Some(right_val),
+                    TokenType::Bang => Some(if right_val == 0 { 1 } else { 0 }),
+                    _ => None,
+                }
+            }
+
             Expr::BinaryOperation {
                 left,
                 operator,
                 right,
             } => {
-                let left_val = Self::evaluate_const_size(left);
-                let right_val = Self::evaluate_const_size(right);
+                let left_val = Self::evaluate_const_expr(left)?;
+                let right_val = Self::evaluate_const_expr(right)?;
 
                 match operator.get_token_type() {
-                    TokenType::Plus => left_val + right_val,
-                    TokenType::Minus => left_val.saturating_sub(right_val),
-                    TokenType::Asterisk => left_val * right_val,
+                    TokenType::Plus => Some(left_val.checked_add(right_val)?),
+                    TokenType::Minus => Some(left_val.checked_sub(right_val)?),
+                    TokenType::Asterisk => Some(left_val.checked_mul(right_val)?),
                     TokenType::Slash => {
                         if right_val != 0 {
-                            left_val / right_val
+                            Some(left_val.checked_div(right_val)?)
                         } else {
-                            0
+                            None
                         }
                     }
-                    _ => 0,
+                    TokenType::Caret => {
+                        if right_val < 0 {
+                            return None;
+                        }
+                        Some(left_val.checked_pow(right_val as u32)?)
+                    }
+
+                    _ => None,
                 }
             }
-            _ => 0,
+
+            _ => None,
         }
     }
 }
@@ -131,10 +155,10 @@ impl TypeChecker {
                     Expr::Identifier(name) => name.clone(),
                     _ => unreachable!("Variable name must be an identifier"),
                 };
-                
+
                 self.symbol_type_table.declare_identifier(
                     var_name,
-                    expected_type,
+                    expected_type.clone(),
                     span,
                     *mutable,
                     &mut self.errors,
@@ -255,6 +279,45 @@ impl TypeChecker {
             }
 
             Expr::Unary { operator, right } => self.check_unary(operator, right, span),
+
+            Expr::Index { target, property } => {
+                let target_type = self.check_expression(target.as_ref())?;
+                let property_type = self.check_expression(property.as_ref())?;
+
+                match target_type.clone() {
+                    Type::FixedArray(element_type, size) => {
+                        if property_type != Type::Integer {
+                            self.throw_error(VynError::TypeMismatch {
+                                expected: vec![Type::Integer],
+                                found: property_type,
+                                span,
+                            });
+                            return Err(());
+                        }
+
+                        if let Some(idx) = Type::evaluate_const_expr(property.as_ref()) {
+                            if idx < 0 || idx >= size as i32 {
+                                self.throw_error(VynError::IndexOutOfBounds {
+                                    size,
+                                    idx: idx as i64,
+                                    span,
+                                });
+                                return Err(());
+                            }
+                        }
+
+                        Ok(*element_type)
+                    }
+
+                    _ => {
+                        self.throw_error(VynError::InvalidIndexing {
+                            target: target_type,
+                            span,
+                        });
+                        Err(())
+                    }
+                }
+            }
 
             Expr::BinaryOperation {
                 left,

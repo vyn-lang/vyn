@@ -1,4 +1,4 @@
-use std::{collections::HashSet, mem};
+use std::{collections::HashSet, mem, vec};
 
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
@@ -289,6 +289,39 @@ impl Compiler {
 
             Expr::ArrayLiteral { elements } => {
                 self.compile_array_literal(elements, expected_type, span)
+            }
+
+            Expr::Index { target, property } => {
+                let dest = self.allocate_register()?;
+                let target_reg = self.compile_expression(*target.clone(), None)?;
+                let property_reg = self.compile_expression(*property.clone(), None)?;
+                let target_type = self.get_expr_type(&target)?;
+
+                match target_type {
+                    Type::FixedArray(_, _) => {
+                        self.emit(
+                            OpCode::ArrayGet,
+                            vec![dest as usize, target_reg as usize, property_reg as usize],
+                            span,
+                        );
+                    }
+
+                    t => {
+                        unreachable!("{t}")
+                    }
+                }
+
+                self.free_register(target_reg);
+                self.free_register(property_reg);
+
+                Some(dest)
+            }
+            unknown => {
+                self.throw_error(VynError::UnknownAST {
+                    node: unknown.to_node(),
+                    span,
+                });
+                None
             }
         }
     }

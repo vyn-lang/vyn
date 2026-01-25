@@ -46,6 +46,10 @@ pub enum Expr {
         identifier: Box<Expression>,
         new_value: Box<Expression>,
     },
+    Index {
+        target: Box<Expression>,
+        property: Box<Expression>,
+    },
 }
 
 impl Display for Expression {
@@ -90,6 +94,10 @@ impl Display for Expr {
                 new_value,
             } => {
                 write!(f, "{} = {}", identifier, new_value)
+            }
+
+            Expr::Index { target, property } => {
+                write!(f, "{}::{}", target, property)
             }
         }
     }

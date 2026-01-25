@@ -69,6 +69,7 @@ impl Parser {
         parser.register_led(TokenType::Equal, Parser::parse_binary_expr);
         parser.register_led(TokenType::NotEqual, Parser::parse_binary_expr);
         parser.register_led(TokenType::Assign, Parser::parse_assignment_expr);
+        parser.register_led(TokenType::BoxColon, Parser::parse_index_expr);
 
         parser.register_stmt(TokenType::Let, Parser::parse_variable_decl);
         parser.register_stmt(TokenType::Type, Parser::parse_type_alias_decl);
@@ -544,6 +545,31 @@ impl Parser {
         }
         .spanned(full_span);
 
+        Some(expr)
+    }
+
+    pub fn parse_index_expr(&mut self, left: Expression) -> Option<Expression> {
+        let bc_token_info = self.current_token().clone();
+        let bc_precedence: u8 =
+            Precedence::get_token_precedence(&bc_token_info.token.get_token_type())?.into();
+        self.advance();
+
+        // Parse right associatively
+        let right = self.try_parse_expression(bc_precedence)?;
+        let right_span = right.span;
+        let left_span = left.span;
+
+        let full_span = Span {
+            line: bc_token_info.span.line,
+            start_column: left_span.start_column,
+            end_column: right_span.end_column,
+        };
+
+        let expr = Expr::Index {
+            target: Box::new(left),
+            property: Box::new(right),
+        }
+        .spanned(full_span);
         Some(expr)
     }
 }

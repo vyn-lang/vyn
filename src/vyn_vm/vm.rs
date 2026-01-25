@@ -215,6 +215,30 @@ impl VynVM {
                         _ => unreachable!(),
                     };
                 }
+                OpCode::ARRAY_GET => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
+                    let arr_ptr_idx = read_uint8(&self.instructions, self.ip + 2) as usize;
+                    let index_reg = read_uint8(&self.instructions, self.ip + 3) as usize; // READ AS REGISTER!
+                    self.ip += 3;
+
+                    let arr_ptr = match self.get_register(arr_ptr_idx) {
+                        RuntimeValue::FixedArrayLiteral(ptr) => ptr,
+                        _ => unreachable!(),
+                    };
+
+                    // READ THE INDEX VALUE FROM THE REGISTER!
+                    let idx = match self.get_register(index_reg) {
+                        RuntimeValue::IntegerLiteral(i) => i as usize,
+                        _ => unreachable!("Array index must be an integer"),
+                    };
+
+                    let heap_arr = match self.get_heap_obj(arr_ptr) {
+                        HeapObject::FixedArray { elements, .. } => elements[idx],
+                        _ => unreachable!(),
+                    };
+
+                    self.set_register(dest, heap_arr);
+                }
 
                 OpCode::MOVE => {
                     let dest = read_uint8(&self.instructions, self.ip + 1) as usize;

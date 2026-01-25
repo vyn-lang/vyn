@@ -40,6 +40,15 @@ pub enum VynError {
         expected: Type,
         span: Span,
     },
+    InvalidIndexing {
+        target: Type,
+        span: Span,
+    },
+    IndexOutOfBounds {
+        size: usize,
+        idx: i64,
+        span: Span,
+    },
     InvalidUnaryOp {
         operator: TokenType,
         operand_type: Type,
@@ -90,21 +99,6 @@ pub enum VynError {
         span: Span,
     },
 
-    // ----- VynVM -----
-    OperandStackUnderflow {
-        stack_length: usize,
-        span: Span,
-    },
-    OperandStackOverflow {
-        stack_length: usize,
-        span: Span,
-    },
-    GlobalStackOverflow {
-        stack_length: usize,
-        max: usize,
-        span: Span,
-    },
-
     // ----- Runtime Arithmetic Errors -----
     ArithmeticError {
         operation: TokenType,
@@ -138,6 +132,8 @@ impl VynError {
             VynError::ExpectedType { span, .. } => *span,
             VynError::RegisterOverflow { span, .. } => *span,
             VynError::NotImplemented { span, .. } => *span,
+            VynError::InvalidIndexing { span, .. } => *span,
+            VynError::IndexOutOfBounds { span, .. } => *span,
 
             VynError::TypeMismatch { span, .. } => *span,
             VynError::InvalidUnaryOp { span, .. } => *span,
@@ -154,9 +150,6 @@ impl VynError {
             VynError::UnknownAST { span, .. } => *span,
             VynError::UndefinedIdentifier { span, .. } => *span,
 
-            VynError::OperandStackUnderflow { span, .. } => *span,
-            VynError::OperandStackOverflow { span, .. } => *span,
-            VynError::GlobalStackOverflow { span, .. } => *span,
             VynError::ArithmeticError { span, .. } => *span,
             VynError::UnaryOperationError { span, .. } => *span,
             VynError::ComparisonOperationError { span, .. } => *span,
@@ -183,13 +176,12 @@ impl VynError {
             VynError::TypeAliasRedeclaration { .. } => "Type",
             VynError::ImmutableMutation { .. } => "Type",
             VynError::LeftHandAssignment { .. } => "Type",
+            VynError::InvalidIndexing { .. } => "Type",
+            VynError::IndexOutOfBounds { .. } => "Type",
 
             VynError::UnknownAST { .. } => "Compiler",
             VynError::UndefinedIdentifier { .. } => "Compiler",
 
-            VynError::OperandStackUnderflow { .. } => "Runtime",
-            VynError::OperandStackOverflow { .. } => "Runtime",
-            VynError::GlobalStackOverflow { .. } => "Runtime",
             VynError::ArithmeticError { .. } => "Runtime",
             VynError::UnaryOperationError { .. } => "Runtime",
             VynError::ComparisonOperationError { .. } => "Runtime",
@@ -283,6 +275,16 @@ impl VynError {
             VynError::UndefinedVariable { name, .. } => {
                 format!("Undefined variable '{}'", name)
             }
+
+            VynError::IndexOutOfBounds { size, idx, .. } => {
+                format!(
+                    "Cannot index a value in index '{}' with a length of '{}'",
+                    idx, size
+                )
+            }
+            VynError::InvalidIndexing { target, .. } => {
+                format!("Cannot index target type '{}'", target)
+            }
             VynError::ImmutableMutation { identifier, .. } => {
                 format!("Cannot mutate immutable identifier '{}'", identifier)
             }
@@ -312,29 +314,6 @@ impl VynError {
                 format!(
                     "Internal compiler error: undefined identifier '{}' escaped type checking",
                     ident_name
-                )
-            }
-
-            VynError::OperandStackUnderflow { stack_length, .. } => {
-                format!(
-                    "Operand stack underflow: attempted to pop from stack with {} elements",
-                    stack_length
-                )
-            }
-
-            VynError::OperandStackOverflow { stack_length, .. } => {
-                format!(
-                    "Operand stack overflow: expression stack exceeded maximum size (current size: {})",
-                    stack_length
-                )
-            }
-
-            VynError::GlobalStackOverflow {
-                stack_length, max, ..
-            } => {
-                format!(
-                    "Global stack overflow: too many global variables ({} / max {})",
-                    stack_length, max
                 )
             }
 
@@ -395,12 +374,13 @@ impl VynError {
             VynError::ExpectedType { got, .. } => Some(format!(
                 "Insert a valid type before '{got}' based on the assigned value"
             )),
-            VynError::RegisterOverflow { .. } => {
-                Some("Split this expression into multiple smaller expressions or statements".to_string())
-            }
-            VynError::NotImplemented { feature, .. } => {
-                Some(format!("'{}' is planned but not yet available in this version", feature))
-            }
+            VynError::RegisterOverflow { .. } => Some(
+                "Split this expression into multiple smaller expressions or statements".to_string(),
+            ),
+            VynError::NotImplemented { feature, .. } => Some(format!(
+                "'{}' is planned but not yet available in this version",
+                feature
+            )),
             VynError::InvalidTypeName { .. } => {
                 Some("Available types: Int, Float, Bool, String".to_string())
             }
@@ -418,9 +398,9 @@ impl VynError {
             VynError::TypeAliasRedeclaration { .. } => {
                 Some("Remove the redeclaration and use it".to_string())
             }
-            VynError::LeftHandAssignment { .. } => {
-                None
-            }
+            VynError::LeftHandAssignment { .. } => None,
+            VynError::InvalidIndexing { .. } => None,
+            VynError::IndexOutOfBounds { .. } => None,
             VynError::ImmutableMutation { identifier, .. } => {
                 Some(format!("Prefix identifier '{identifier}' with '@'"))
             }
@@ -473,21 +453,6 @@ impl VynError {
                 "This is a compiler bug. The type checker should have caught this error"
                     .to_string(),
             ),
-
-            VynError::OperandStackUnderflow { .. } => {
-                Some("This is a virtual machine bug. Please report this issue".to_string())
-            }
-
-            VynError::OperandStackOverflow { .. } => {
-                Some("Reduce expression complexity or split expressions into smaller statements".to_string())
-            }
-
-            VynError::GlobalStackOverflow { .. } => {
-                Some(
-                    "Reduce the number of global variables, or move values into local scopes or functions"
-                    .to_string(),
-                )
-            }
 
             VynError::ArithmeticError {
                 left_type,

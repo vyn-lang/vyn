@@ -6,14 +6,33 @@ use crate::{
 
 impl Compiler {
     pub(crate) fn get_expr_type(&mut self, expr: &Box<Expression>) -> Option<Type> {
-        match expr.node {
+        match expr.node.clone() {
             Expr::IntegerLiteral(_) => Some(Type::Integer),
             Expr::FloatLiteral(_) => Some(Type::Float),
             Expr::BooleanLiteral(_) => Some(Type::Bool),
             Expr::StringLiteral(_) => Some(Type::String),
-            Expr::Identifier(_) => Some(Type::Identifier),
+            Expr::Identifier(name) => {
+                match self.symbol_table.resolve_identifier(&name, expr.span) {
+                    Ok(symbol) => Some(symbol.symbol_type.clone()), // Get the actual type from symbol table
+                    Err(ve) => {
+                        self.throw_error(ve);
+                        return None;
+                    }
+                }
+            }
             Expr::NilLiteral => Some(Type::Nil),
 
+            Expr::Index { target, .. } => {
+                let target_type = self.get_expr_type(&target)?;
+
+                match target_type {
+                    Type::FixedArray(element_type, _) => Some(*element_type),
+                    _ => {
+                        eprintln!("ERROR: Trying to index non-array type: {:?}", target_type);
+                        None
+                    }
+                }
+            }
             _ => None,
         }
     }
