@@ -539,13 +539,25 @@ impl Parser {
             end_column: right.span.end_column,
         };
 
-        let expr = Expr::VariableAssignment {
-            identifier: Box::new(left),
-            new_value: Box::new(right),
+        match left.node {
+            Expr::Index { target, property } => {
+                let expr = Expr::IndexAssignment {
+                    target,
+                    property,
+                    new_value: Box::new(right),
+                }
+                .spanned(full_span);
+                return Some(expr);
+            }
+            _ => {
+                let expr = Expr::VariableAssignment {
+                    identifier: Box::new(left),
+                    new_value: Box::new(right),
+                }
+                .spanned(full_span);
+                return Some(expr);
+            }
         }
-        .spanned(full_span);
-
-        Some(expr)
     }
 
     pub fn parse_index_expr(&mut self, left: Expression) -> Option<Expression> {

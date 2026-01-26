@@ -294,7 +294,8 @@ impl Compiler {
             Expr::Index { target, property } => {
                 let dest = self.allocate_register()?;
                 let target_reg = self.compile_expression(*target.clone(), None)?;
-                let property_reg = self.compile_expression(*property.clone(), None)?;
+                let property_reg = self.compile_expression(*property, None)?;
+
                 let target_type = self.get_expr_type(&target)?;
 
                 match target_type {
@@ -306,16 +307,49 @@ impl Compiler {
                         );
                     }
 
-                    t => {
-                        unreachable!("{t}")
+                    _ => {
+                        unreachable!()
                     }
                 }
 
-                self.free_register(target_reg);
+                self.free_register(target_reg); // This is fine - pinned registers won't actually free
                 self.free_register(property_reg);
 
                 Some(dest)
             }
+
+            Expr::IndexAssignment {
+                target,
+                property,
+                new_value,
+            } => {
+                let target_reg = self.compile_expression(*target.clone(), None)?;
+
+                let index = match property.node {
+                    Expr::IntegerLiteral(v) => v as usize,
+                    _ => unreachable!(),
+                };
+
+                let value_reg = self.compile_expression(*new_value, None)?;
+                let target_type = self.get_expr_type(&target)?;
+
+                match target_type {
+                    Type::FixedArray(_, _) => {
+                        self.emit(
+                            OpCode::ArraySet,
+                            vec![target_reg as usize, index, value_reg as usize],
+                            span,
+                        );
+                    }
+
+                    _ => unreachable!(),
+                }
+
+                self.free_register(target_reg);
+                self.free_register(value_reg);
+                Some(target_reg)
+            }
+
             unknown => {
                 self.throw_error(VynError::UnknownAST {
                     node: unknown.to_node(),

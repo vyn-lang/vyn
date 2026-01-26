@@ -319,6 +319,59 @@ impl TypeChecker {
                 }
             }
 
+            Expr::IndexAssignment {
+                target,
+                property,
+                new_value,
+            } => {
+                let target_type = self.check_expression(target)?;
+                let property_type = self.check_expression(property)?;
+                let new_value_type = self.check_expression(new_value)?;
+
+                match target_type {
+                    Type::FixedArray(element_type, size) => {
+                        if property_type != Type::Integer {
+                            self.throw_error(VynError::TypeMismatch {
+                                expected: vec![Type::Integer],
+                                found: property_type,
+                                span,
+                            });
+                            return Err(());
+                        }
+
+                        if let Some(idx) = Type::evaluate_const_expr(property.as_ref()) {
+                            if idx < 0 || idx >= size as i32 {
+                                self.throw_error(VynError::IndexOutOfBounds {
+                                    size,
+                                    idx: idx as i64,
+                                    span,
+                                });
+                                return Err(());
+                            }
+                        }
+
+                        if *element_type != new_value_type {
+                            self.throw_error(VynError::TypeMismatch {
+                                expected: vec![*element_type],
+                                found: new_value_type,
+                                span,
+                            });
+                            return Err(());
+                        }
+
+                        Ok(*element_type)
+                    }
+
+                    _ => {
+                        self.throw_error(VynError::InvalidIndexing {
+                            target: target_type,
+                            span,
+                        });
+                        Err(())
+                    }
+                }
+            }
+
             Expr::BinaryOperation {
                 left,
                 operator,
