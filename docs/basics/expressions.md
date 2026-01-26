@@ -11,6 +11,7 @@ The simplest expressions are literal values:
 3.14            // Float literal
 true            // Bool literal
 "Hello"         // String literal
+[1, 2, 3]       // Array literal
 ```
 
 ## Variable Expressions
@@ -20,6 +21,24 @@ Variable names are expressions that evaluate to their value:
 ```vyn
 let x: Int = 10
 let y: Int = x  // x is an expression
+```
+
+## Array Expressions
+
+Array literals create fixed-size arrays:
+
+```vyn
+let numbers: [3]Int = [1, 2, 3]
+let prices: [2]Float = [9.99, 14.99]
+let flags: [4]Bool = [true, false, true, true]
+let names: [2]String = ["Alice", "Bob"]
+```
+
+Array expressions must match their declared size exactly:
+
+```vyn
+let valid: [3]Int = [10, 20, 30]     // OK
+let invalid: [3]Int = [10, 20]       // Error! Expected 3 elements
 ```
 
 ## Arithmetic Expressions
@@ -94,6 +113,12 @@ let base: Int = 3
 let exponent: Int = 4
 let result: Int = base ^ exponent
 stdout# result  // 81
+
+// Working with arrays
+let scores: [3]Int = [85, 92, 78]
+let coordinates: [2]Float = [3.5, 7.2]
+stdout# scores
+stdout# coordinates
 ```
 
 ## Type Compatibility
@@ -104,6 +129,9 @@ Expressions must use compatible types:
 let x: Int = 5 + 3        // OK - both Int
 let y: Float = 2.5 + 1.5  // OK - both Float
 let z: Int = 5 + 2.5      // Error! Cannot mix Int and Float
+
+let arr: [2]Int = [1, 2]  // OK - correct size
+let bad: [2]Int = [1, 2, 3]  // Error! Size mismatch
 ```
 
 ## Next Steps
