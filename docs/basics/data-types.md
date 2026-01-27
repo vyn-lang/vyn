@@ -45,77 +45,56 @@ let message: String = "Hello, World!"
 let empty: String = ""
 ```
 
-## Fixed-Size Arrays
+## Collection Types
 
-Arrays in Vyn have a fixed size that must be specified in the type annotation. The syntax is `[n]T` where `n` is the size and `T` is the element type.
+### Arrays
 
-The array contents **must** be exactly the specified size—no more, no less.
+Arrays have a fixed size specified in the type annotation using the syntax `[n]T`, where `n` is the size and `T` is the element type. Array literals must contain exactly the declared number of elements.
 
 ```vyn
-let arr: [2]Int = [10, 20]
 let coordinates: [3]Float = [1.5, 2.7, 3.9]
 let flags: [4]Bool = [true, false, true, false]
 let names: [2]String = ["Alice", "Bob"]
+
+// Compiler enforces size
+let valid: [3]Int = [1, 2, 3]
+let invalid: [3]Int = [1, 2]         // Error: Expected 3 elements
 ```
 
-### Array Size Enforcement
+### Sequences (Dynamic Arrays)
 
-The compiler enforces that array literals match the declared size:
+Sequences are dynamic arrays that can grow and shrink at runtime. The syntax is `[]T`, where `T` is the element type. Sequences can hold any number of elements, including zero.
 
 ```vyn
-let valid: [3]Int = [1, 2, 3]        // ✓ Correct
-let too_few: [3]Int = [1, 2]         // ✗ Error! Expected 3 elements
-let too_many: [3]Int = [1, 2, 3, 4]  // ✗ Error! Expected 3 elements
+let numbers: []Int = [1, 2, 3, 4, 5]
+let scores: []Float = [95.5, 87.3, 92.1]
+let tags: []String = ["vyn", "programming", "language"]
+let empty: []Int = []
 ```
 
 ## Type Annotations
 
-Every variable must specify its type:
+All variables require explicit type annotations:
 
 ```vyn
 let count: Int = 0
-let score: Float = 98.5
 let is_valid: Bool = true
-let username: String = "alice"
 let points: [5]Int = [10, 20, 30, 40, 50]
-```
-
-## Examples
-
-```vyn
-// Different types
-let quantity: Int = 100
-let discount: Float = 0.15
-let in_stock: Bool = true
-let product_name: String = "Widget"
-
-// Fixed-size arrays
-let inventory: [3]Int = [50, 75, 100]
-let prices: [2]Float = [19.99, 29.99]
-
-// Using types in expressions
-let total: Int = quantity * 2
-let final_price: Float = 50.0 * (1.0 - discount)
-
-// Output
-stdout# product_name
-stdout# total
-stdout# inventory
+let dynamic_points: []Int = [10, 20, 30]
 ```
 
 ## Type Safety
 
-Vyn's type system prevents many common errors at compile time:
+The compiler enforces type correctness at compile time:
 
 ```vyn
 let x: Int = 5
 let y: String = "10"
-let z: Int = x + y  // Error! Cannot add Int and String
+let z: Int = x + y              // Error: Cannot add Int and String
 
-let arr1: [2]Int = [1, 2, 3]  // Error! Size mismatch
+let arr: [2]Int = [1, 2, 3]     // Error: Size mismatch
+let seq: []String = [1, 2, 3]   // Error: Type mismatch (Int vs String)
 ```
-
-The compiler catches type mismatches before your program runs.
 
 ## Next Steps
 
