@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
-    compiler::symbol_table::SymbolTable,
-    errors::{ErrorCollector, VynError},
+    error_handler::{error_collector::ErrorCollector, errors::VynError},
     parser::{lookups::Precedence, type_parser::TypeTable},
     tokens::{Token, TokenInfo, TokenType},
     utils::{Span, Spanned},

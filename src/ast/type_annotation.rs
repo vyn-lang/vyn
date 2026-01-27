@@ -9,8 +9,8 @@ pub enum TypeAnnotation {
     IntegerType,
     FloatType,
     BooleanType,
-    FixedArrayType(Box<TypeAnnotation>, Expression),
-    DynamicArrayType(Box<TypeAnnotation>),
+    ArrayType(Box<TypeAnnotation>, Expression),
+    SequenceType(Box<TypeAnnotation>),
 }
 
 impl Display for TypeAnnotation {
@@ -21,8 +21,8 @@ impl Display for TypeAnnotation {
             TypeAnnotation::FloatType => write!(f, "Float"),
             TypeAnnotation::BooleanType => write!(f, "Bool"),
 
-            TypeAnnotation::FixedArrayType(ta, s) => write!(f, "[{}]{}", s, ta),
-            TypeAnnotation::DynamicArrayType(ta) => write!(f, "[]{}", ta),
+            TypeAnnotation::ArrayType(ta, s) => write!(f, "[{}]{}", s, ta),
+            TypeAnnotation::SequenceType(ta) => write!(f, "[]{}", ta),
         }
     }
 }

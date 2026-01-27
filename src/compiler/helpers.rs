@@ -26,26 +26,15 @@ impl Compiler {
                 let target_type = self.get_expr_type(&target)?;
 
                 match target_type {
-                    Type::FixedArray(element_type, _) => Some(*element_type),
+                    Type::Array(element_type, _) | Type::Sequence(element_type) => {
+                        Some(*element_type)
+                    }
                     _ => {
-                        eprintln!("ERROR: Trying to index non-array type: {:?}", target_type);
-                        None
+                        unreachable!()
                     }
                 }
             }
             _ => None,
         }
     }
-
-    // NOTE: This will be used when preallocate syntax is created [v; n] ---
-    // pub(crate) fn is_default_value(&self, expr: &Expression, ty: &Type) -> bool {
-    //     match (&expr.node, ty) {
-    //         (Expr::IntegerLiteral(0), Type::Integer) => true,
-    //         (Expr::FloatLiteral(f), Type::Float) if *f == 0.0 => true,
-    //         (Expr::BooleanLiteral(false), Type::Bool) => true,
-    //         (Expr::NilLiteral, Type::Nil) => true,
-    //         (Expr::StringLiteral(s), Type::String) if s.is_empty() => true,
-    //         _ => false,
-    //     }
-    // }
 }

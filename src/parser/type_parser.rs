@@ -5,7 +5,7 @@ use crate::{
         ast::{Expr, Expression},
         type_annotation::TypeAnnotation,
     },
-    errors::VynError,
+    error_handler::errors::VynError,
     parser::{lookups::Precedence, parser::Parser},
     tokens::TokenType,
 };
@@ -78,7 +78,7 @@ impl Parser {
             self.advance();
 
             let arr_type = self.try_parse_type()?;
-            let arr = TypeAnnotation::DynamicArrayType(Box::new(arr_type));
+            let arr = TypeAnnotation::SequenceType(Box::new(arr_type));
 
             return Some(arr);
         }
@@ -91,7 +91,7 @@ impl Parser {
 
         let arr_type = self.try_parse_type()?;
 
-        let arr = TypeAnnotation::FixedArrayType(Box::new(arr_type), size);
+        let arr = TypeAnnotation::ArrayType(Box::new(arr_type), size);
 
         Some(arr)
     }

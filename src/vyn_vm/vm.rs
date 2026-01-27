@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use crate::{
     bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16, read_uint32},
     compiler::{compiler::Bytecode, debug_info::DebugInfo},
-    errors::VynError,
+    error_handler::errors::VynError,
     runtime_value::{heap::HeapObject, values::RuntimeValue},
 };
 

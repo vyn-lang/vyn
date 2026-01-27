@@ -2,7 +2,7 @@ pub mod ast;
 pub mod bytecode;
 pub mod cli;
 pub mod compiler;
-pub mod errors;
+pub mod error_handler;
 pub mod lexer;
 pub mod parser;
 pub mod runtime_value;

@@ -1,6 +1,6 @@
 use crate::{
-    bytecode::bytecode::read_uint8, errors::VynError, runtime_value::values::RuntimeValue,
-    vyn_vm::vm::VynVM,
+    bytecode::bytecode::read_uint8, error_handler::errors::VynError,
+    runtime_value::values::RuntimeValue, vyn_vm::vm::VynVM,
 };
 
 impl VynVM {

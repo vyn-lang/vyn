@@ -4,7 +4,7 @@ use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
     bytecode::bytecode::{Instructions, OpCode},
     compiler::{debug_info::DebugInfo, symbol_table::SymbolTable},
-    errors::{ErrorCollector, VynError},
+    error_handler::{error_collector::ErrorCollector, errors::VynError},
     runtime_value::values::RuntimeValue,
     type_checker::type_checker::Type,
     utils::Span,
@@ -299,7 +299,7 @@ impl Compiler {
                 let target_type = self.get_expr_type(&target)?;
 
                 match target_type {
-                    Type::FixedArray(_, _) | Type::DynamicArray(_) => {
+                    Type::Array(_, _) | Type::Sequence(_) => {
                         self.emit(
                             OpCode::ArrayGet,
                             vec![dest as usize, target_reg as usize, property_reg as usize],
@@ -334,7 +334,7 @@ impl Compiler {
                 let target_type = self.get_expr_type(&target)?;
 
                 match target_type {
-                    Type::FixedArray(_, _) | Type::DynamicArray(_) => {
+                    Type::Array(_, _) | Type::Sequence(_) => {
                         self.emit(
                             OpCode::ArraySet,
                             vec![target_reg as usize, index, value_reg as usize],
@@ -367,7 +367,7 @@ impl Compiler {
         span: Span,
     ) -> Option<u8> {
         match expected_type? {
-            Type::FixedArray(t, size) => {
+            Type::Array(t, size) => {
                 let dest = self.allocate_register()?;
 
                 self.emit(OpCode::ArrayNewFixed, vec![dest as usize, *size], span);
@@ -387,7 +387,7 @@ impl Compiler {
                 Some(dest)
             }
 
-            Type::DynamicArray(t) => {
+            Type::Sequence(t) => {
                 let dest = self.allocate_register()?;
 
                 self.emit(

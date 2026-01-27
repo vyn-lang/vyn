@@ -1,6 +1,6 @@
 use crate::{
     ast::ast::Expression,
-    errors::VynError,
+    error_handler::errors::VynError,
     tokens::{Token, TokenType},
     type_checker::type_checker::{Type, TypeChecker},
     utils::Span,

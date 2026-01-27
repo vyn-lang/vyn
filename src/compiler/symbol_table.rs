@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{errors::VynError, type_checker::type_checker::Type, utils::Span};
+use crate::{error_handler::errors::VynError, type_checker::type_checker::Type, utils::Span};
 
 pub struct Symbol {
     pub symbol_type: Type,

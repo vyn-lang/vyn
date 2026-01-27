@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::{
-    errors::{ErrorCollector, VynError},
+    error_handler::{error_collector::ErrorCollector, errors::VynError},
     type_checker::type_checker::Type,
     utils::Span,
 };

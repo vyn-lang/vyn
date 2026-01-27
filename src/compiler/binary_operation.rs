@@ -2,7 +2,7 @@ use crate::{
     ast::ast::{Expr, Expression},
     bytecode::bytecode::OpCode,
     compiler::compiler::Compiler,
-    errors::VynError,
+    error_handler::errors::VynError,
     runtime_value::values::RuntimeValue,
     tokens::{Token, TokenType},
     type_checker::type_checker::Type,

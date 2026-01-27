@@ -1,4 +1,4 @@
-use crate::{bytecode::bytecode::read_uint8, errors::VynError, vyn_vm::vm::VynVM};
+use crate::{bytecode::bytecode::read_uint8, error_handler::errors::VynError, vyn_vm::vm::VynVM};
 
 impl VynVM {
     #[inline]

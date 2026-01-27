@@ -3,7 +3,7 @@ use crate::{
         ast::{Expr, Expression, Program, Statement, Stmt},
         type_annotation::TypeAnnotation,
     },
-    errors::{ErrorCollector, VynError},
+    error_handler::{error_collector::ErrorCollector, errors::VynError},
     tokens::TokenType,
     type_checker::symbol_type_table::SymbolTypeTable,
     utils::throw_error,
@@ -19,8 +19,8 @@ pub enum Type {
     String,
     Nil,
     Identifier,
-    FixedArray(Box<Type>, usize),
-    DynamicArray(Box<Type>),
+    Array(Box<Type>, usize),
+    Sequence(Box<Type>),
 }
 
 impl fmt::Display for Type {
@@ -32,10 +32,10 @@ impl fmt::Display for Type {
             Type::String => write!(f, "String"),
             Type::Nil => write!(f, "Nil"),
             Type::Identifier => write!(f, "Identifier"),
-            Type::FixedArray(t, s) => {
+            Type::Array(t, s) => {
                 write!(f, "[{}]{}", s, t)
             }
-            Type::DynamicArray(t) => {
+            Type::Sequence(t) => {
                 write!(f, "[]{}", t)
             }
         }
@@ -49,16 +49,16 @@ impl Type {
             TypeAnnotation::IntegerType => Self::Integer,
             TypeAnnotation::FloatType => Self::Float,
             TypeAnnotation::BooleanType => Self::Bool,
-            TypeAnnotation::FixedArrayType(ta, size_expr) => {
+            TypeAnnotation::ArrayType(ta, size_expr) => {
                 let t = Self::from_anotated_type(ta.as_ref());
                 let size = Self::evaluate_const_expr(size_expr)
                     .and_then(|v| if v >= 0 { Some(v as usize) } else { None })
                     .unwrap_or(0);
-                Type::FixedArray(Box::new(t), size)
+                Type::Array(Box::new(t), size)
             }
-            TypeAnnotation::DynamicArrayType(ta) => {
+            TypeAnnotation::SequenceType(ta) => {
                 let t = Type::from_anotated_type(ta);
-                Type::DynamicArray(Box::new(t))
+                Type::Sequence(Box::new(t))
             }
         }
     }
@@ -264,9 +264,9 @@ impl TypeChecker {
 
                 let exp_type = expected_type
                     .clone()
-                    .unwrap_or(Type::DynamicArray(Box::new(Type::Nil)));
+                    .unwrap_or(Type::Sequence(Box::new(Type::Nil)));
                 match &exp_type {
-                    Type::FixedArray(element_type, size) => {
+                    Type::Array(element_type, size) => {
                         if elements.len() != *size {
                             self.throw_error(VynError::ArrayLengthMismatch {
                                 expected: *size,
@@ -291,7 +291,7 @@ impl TypeChecker {
 
                         Ok(exp_type)
                     }
-                    Type::DynamicArray(element_type) => {
+                    Type::Sequence(element_type) => {
                         for element in elements {
                             let element_type =
                                 self.check_expression(element, Some(*element_type.clone()))?;
@@ -334,7 +334,7 @@ impl TypeChecker {
                     self.check_expression(property.as_ref(), expected_type.clone())?;
 
                 match target_type.clone() {
-                    Type::FixedArray(element_type, size) => {
+                    Type::Array(element_type, size) => {
                         if property_type != Type::Integer {
                             self.throw_error(VynError::TypeMismatch {
                                 expected: vec![Type::Integer],
@@ -357,7 +357,7 @@ impl TypeChecker {
 
                         Ok(*element_type)
                     }
-                    Type::DynamicArray(element_type) => {
+                    Type::Sequence(element_type) => {
                         if property_type != Type::Integer {
                             self.throw_error(VynError::TypeMismatch {
                                 expected: vec![Type::Integer],
@@ -390,7 +390,7 @@ impl TypeChecker {
                 let new_value_type = self.check_expression(new_value, expected_type.clone())?;
 
                 match target_type {
-                    Type::FixedArray(element_type, size) => {
+                    Type::Array(element_type, size) => {
                         if property_type != Type::Integer {
                             self.throw_error(VynError::TypeMismatch {
                                 expected: vec![Type::Integer],
@@ -423,7 +423,7 @@ impl TypeChecker {
                         Ok(*element_type)
                     }
 
-                    Type::DynamicArray(element_type) => {
+                    Type::Sequence(element_type) => {
                         if property_type != Type::Integer {
                             self.throw_error(VynError::TypeMismatch {
                                 expected: vec![Type::Integer],
