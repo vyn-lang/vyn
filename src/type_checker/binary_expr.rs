@@ -15,8 +15,8 @@ impl TypeChecker {
         span: Span,
     ) -> Result<Type, ()> {
         // If either side has an error, propagate it (stops cascading errors!)
-        let left_type = self.check_expression(left)?;
-        let right_type = self.check_expression(right)?;
+        let left_type = self.check_expression(left, None)?;
+        let right_type = self.check_expression(right, None)?;
         let op_tok = operator.get_token_type();
 
         match op_tok {
@@ -99,7 +99,7 @@ impl TypeChecker {
         }
 
         if left != Type::Integer && left != Type::Float {
-           self.throw_error(VynError::InvalidBinaryOp {
+            self.throw_error(VynError::InvalidBinaryOp {
                 operator: op,
                 left_type: left.clone(),
                 right_type: right,

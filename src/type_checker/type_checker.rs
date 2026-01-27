@@ -20,6 +20,7 @@ pub enum Type {
     Nil,
     Identifier,
     FixedArray(Box<Type>, usize),
+    DynamicArray(Box<Type>),
 }
 
 impl fmt::Display for Type {
@@ -33,6 +34,9 @@ impl fmt::Display for Type {
             Type::Identifier => write!(f, "Identifier"),
             Type::FixedArray(t, s) => {
                 write!(f, "[{}]{}", s, t)
+            }
+            Type::DynamicArray(t) => {
+                write!(f, "[]{}", t)
             }
         }
     }
@@ -51,6 +55,10 @@ impl Type {
                     .and_then(|v| if v >= 0 { Some(v as usize) } else { None })
                     .unwrap_or(0);
                 Type::FixedArray(Box::new(t), size)
+            }
+            TypeAnnotation::DynamicArrayType(ta) => {
+                let t = Type::from_anotated_type(ta);
+                Type::DynamicArray(Box::new(t))
             }
         }
     }
@@ -138,7 +146,7 @@ impl TypeChecker {
 
         match &stmt.node {
             Stmt::Expression { expression } => {
-                self.check_expression(expression)?;
+                self.check_expression(expression, None)?;
                 Ok(())
             }
 
@@ -149,7 +157,7 @@ impl TypeChecker {
                 mutable,
             } => {
                 let expected_type = Type::from_anotated_type(annotated_type);
-                let value_type = self.check_expression(value)?;
+                let value_type = self.check_expression(value, Some(expected_type.clone()))?;
 
                 let var_name = match &identifier.node {
                     Expr::Identifier(name) => name.clone(),
@@ -214,7 +222,7 @@ impl TypeChecker {
                 consequence,
                 alternate,
             } => {
-                self.check_expression(condition)?;
+                self.check_expression(condition, None)?;
                 self.check_statement(&consequence)?;
 
                 if let Some(alt) = alternate.as_ref() {
@@ -224,7 +232,7 @@ impl TypeChecker {
             }
 
             Stmt::StdoutLog { log_value } => {
-                self.check_expression(log_value)?;
+                self.check_expression(log_value, None)?;
                 Ok(())
             }
 
@@ -232,7 +240,11 @@ impl TypeChecker {
         }
     }
 
-    pub(crate) fn check_expression(&mut self, expr: &Expression) -> Result<Type, ()> {
+    pub(crate) fn check_expression(
+        &mut self,
+        expr: &Expression,
+        expected_type: Option<Type>,
+    ) -> Result<Type, ()> {
         let span = expr.span;
 
         match &expr.node {
@@ -242,32 +254,68 @@ impl TypeChecker {
             Expr::StringLiteral(_) => Ok(Type::String),
             Expr::NilLiteral => Ok(Type::Nil),
             Expr::ArrayLiteral { elements } => {
-                if elements.is_empty() {
-                    self.throw_error(VynError::TypeMismatch {
-                        expected: vec![],
-                        found: Type::Nil,
+                if elements.is_empty() && expected_type.is_none() {
+                    self.throw_error(VynError::TypeInfer {
+                        expr: expr.node.clone(),
                         span,
                     });
                     return Err(());
                 }
 
-                // Check first element to determine array type
-                let first_type = self.check_expression(&elements[0])?;
+                let exp_type = expected_type
+                    .clone()
+                    .unwrap_or(Type::DynamicArray(Box::new(Type::Nil)));
+                match &exp_type {
+                    Type::FixedArray(element_type, size) => {
+                        if elements.len() != *size {
+                            self.throw_error(VynError::ArrayLengthMismatch {
+                                expected: *size,
+                                got: elements.len(),
+                                span,
+                            });
+                            return Err(());
+                        }
 
-                // Verify all elements have the same type
-                for elem in &elements[1..] {
-                    let elem_type = self.check_expression(elem)?;
-                    if elem_type != first_type {
+                        for (i, element) in elements.iter().enumerate() {
+                            let element_type =
+                                self.check_expression(element, Some(*element_type.clone()))?;
+                            if element_type != element_type.clone() {
+                                self.throw_error(VynError::TypeMismatch {
+                                    expected: vec![element_type.clone()],
+                                    found: element_type,
+                                    span: element.span,
+                                });
+                                return Err(());
+                            }
+                        }
+
+                        Ok(exp_type)
+                    }
+                    Type::DynamicArray(element_type) => {
+                        for element in elements {
+                            let element_type =
+                                self.check_expression(element, Some(*element_type.clone()))?;
+                            if element_type != element_type.clone() {
+                                self.throw_error(VynError::TypeMismatch {
+                                    expected: vec![element_type.clone()],
+                                    found: element_type,
+                                    span: element.span,
+                                });
+                                return Err(());
+                            }
+                        }
+
+                        Ok(exp_type)
+                    }
+                    _ => {
                         self.throw_error(VynError::TypeMismatch {
-                            expected: vec![first_type.clone()],
-                            found: elem_type,
-                            span: elem.span,
+                            expected: vec![exp_type],
+                            found: Type::Nil,
+                            span,
                         });
-                        return Err(());
+                        Err(())
                     }
                 }
-
-                Ok(Type::FixedArray(Box::new(first_type), elements.len()))
             }
 
             Expr::Identifier(name) => {
@@ -281,8 +329,9 @@ impl TypeChecker {
             Expr::Unary { operator, right } => self.check_unary(operator, right, span),
 
             Expr::Index { target, property } => {
-                let target_type = self.check_expression(target.as_ref())?;
-                let property_type = self.check_expression(property.as_ref())?;
+                let target_type = self.check_expression(target.as_ref(), expected_type.clone())?;
+                let property_type =
+                    self.check_expression(property.as_ref(), expected_type.clone())?;
 
                 match target_type.clone() {
                     Type::FixedArray(element_type, size) => {
@@ -308,6 +357,18 @@ impl TypeChecker {
 
                         Ok(*element_type)
                     }
+                    Type::DynamicArray(element_type) => {
+                        if property_type != Type::Integer {
+                            self.throw_error(VynError::TypeMismatch {
+                                expected: vec![Type::Integer],
+                                found: property_type,
+                                span,
+                            });
+                            return Err(());
+                        }
+
+                        Ok(*element_type)
+                    }
 
                     _ => {
                         self.throw_error(VynError::InvalidIndexing {
@@ -324,9 +385,9 @@ impl TypeChecker {
                 property,
                 new_value,
             } => {
-                let target_type = self.check_expression(target)?;
-                let property_type = self.check_expression(property)?;
-                let new_value_type = self.check_expression(new_value)?;
+                let target_type = self.check_expression(target, expected_type.clone())?;
+                let property_type = self.check_expression(property, expected_type.clone())?;
+                let new_value_type = self.check_expression(new_value, expected_type.clone())?;
 
                 match target_type {
                     Type::FixedArray(element_type, size) => {
@@ -348,6 +409,28 @@ impl TypeChecker {
                                 });
                                 return Err(());
                             }
+                        }
+
+                        if *element_type != new_value_type {
+                            self.throw_error(VynError::TypeMismatch {
+                                expected: vec![*element_type],
+                                found: new_value_type,
+                                span,
+                            });
+                            return Err(());
+                        }
+
+                        Ok(*element_type)
+                    }
+
+                    Type::DynamicArray(element_type) => {
+                        if property_type != Type::Integer {
+                            self.throw_error(VynError::TypeMismatch {
+                                expected: vec![Type::Integer],
+                                found: property_type,
+                                span,
+                            });
+                            return Err(());
                         }
 
                         if *element_type != new_value_type {
@@ -390,7 +473,7 @@ impl TypeChecker {
                     }
                 };
 
-                let value_type = self.check_expression(new_value)?;
+                let value_type = self.check_expression(new_value, expected_type)?;
                 let ident_symbol = self.symbol_type_table.resolve_identifier(
                     &ident_name,
                     span,

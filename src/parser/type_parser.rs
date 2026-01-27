@@ -74,8 +74,15 @@ impl Parser {
             return None;
         }
 
-        // TODO: Right now, this assumes ALL arrays are fixed
-        // in size
+        if self.current_token_type() == TokenType::RightBracket {
+            self.advance();
+
+            let arr_type = self.try_parse_type()?;
+            let arr = TypeAnnotation::DynamicArrayType(Box::new(arr_type));
+
+            return Some(arr);
+        }
+
         let size = self.try_parse_expression(Precedence::Default.into())?;
 
         if !self.expect(TokenType::RightBracket) {

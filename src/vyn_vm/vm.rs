@@ -2,6 +2,7 @@ use std::io::{self, Write};
 
 use crate::{
     bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16, read_uint32},
+    compiler::{compiler::Bytecode, debug_info::DebugInfo},
     errors::VynError,
     runtime_value::{heap::HeapObject, values::RuntimeValue},
 };
@@ -25,26 +26,25 @@ pub struct VynVM {
     pub(crate) instructions: Instructions,
     // Instruction pointer
     pub(crate) ip: usize,
+    // Instruction spans
+    pub(crate) debug_info: DebugInfo,
 }
 
 impl VynVM {
-    pub fn new(
-        instructions: Instructions,
-        constants: Vec<RuntimeValue>,
-        string_table: Vec<String>,
-    ) -> Self {
-        let mut heap_table: Vec<HeapObject> = Vec::with_capacity(string_table.len());
+    pub fn new(bytecode: Bytecode) -> Self {
+        let mut heap_table: Vec<HeapObject> = Vec::with_capacity(bytecode.string_table.len());
 
-        for s in string_table {
+        for s in bytecode.string_table {
             let string = HeapObject::String(s);
             heap_table.push(string);
         }
 
         Self {
             registers: [NIL; MAX_REGISTERS], // Initialize all to Nil singleton
-            constants,
+            constants: bytecode.constants,
             heap_table,
-            instructions,
+            instructions: bytecode.instructions,
+            debug_info: bytecode.debug_info,
             ip: 0,
         }
     }
@@ -195,6 +195,38 @@ impl VynVM {
                     let arr_idx = self.push_heap(heap_arr);
                     self.set_register(dest, RuntimeValue::FixedArrayLiteral(arr_idx));
                 }
+                OpCode::ARRAY_NEW_DYNAMIC => {
+                    let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
+                    let init_cap = read_uint32(&self.instructions, self.ip + 2) as usize;
+                    self.ip += 5;
+
+                    let heap_arr = HeapObject::DynamicArray {
+                        elements: Vec::with_capacity(init_cap),
+                    };
+
+                    let arr_idx = self.push_heap(heap_arr);
+                    self.set_register(dest, RuntimeValue::DynamicArrayLiteral(arr_idx));
+                }
+                OpCode::ARRAY_PUSH => {
+                    let arr_reg_idx = read_uint8(&self.instructions, self.ip + 1) as usize;
+                    let val_reg_idx = read_uint8(&self.instructions, self.ip + 2) as usize;
+                    self.ip += 2;
+
+                    let value = self.get_register(val_reg_idx).clone();
+
+                    let heap_idx = match self.get_register(arr_reg_idx) {
+                        RuntimeValue::FixedArrayLiteral(idx) => idx,
+                        RuntimeValue::DynamicArrayLiteral(idx) => idx,
+                        unknown => unreachable!("Expected array in register, got {unknown:?}"),
+                    };
+
+                    match self.get_heap_obj(heap_idx) {
+                        HeapObject::DynamicArray { elements } => {
+                            elements.push(value);
+                        }
+                        _ => unreachable!(),
+                    }
+                }
                 OpCode::ARRAY_SET => {
                     let arr_reg_idx = read_uint8(&self.instructions, self.ip + 1) as usize;
                     let index = read_uint32(&self.instructions, self.ip + 2) as usize;
@@ -205,15 +237,27 @@ impl VynVM {
 
                     let heap_idx = match self.get_register(arr_reg_idx) {
                         RuntimeValue::FixedArrayLiteral(idx) => idx,
-                        _ => unreachable!("Expected array in register"),
+                        RuntimeValue::DynamicArrayLiteral(idx) => idx,
+                        unknown => unreachable!("Expected array in register, got {unknown:?}"),
                     };
 
                     match self.get_heap_obj(heap_idx) {
                         HeapObject::FixedArray { elements, .. } => {
                             elements[index] = value;
                         }
+                        HeapObject::DynamicArray { elements } => {
+                            if index > elements.len() {
+                                return Err(VynError::IndexOutOfBounds {
+                                    size: elements.len(),
+                                    idx: index as i64,
+                                    span: self.debug_info.get_span(self.ip),
+                                });
+                            }
+
+                            elements[index] = value;
+                        }
                         _ => unreachable!(),
-                    };
+                    }
                 }
                 OpCode::ARRAY_GET => {
                     let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
@@ -223,10 +267,10 @@ impl VynVM {
 
                     let arr_ptr = match self.get_register(arr_ptr_idx) {
                         RuntimeValue::FixedArrayLiteral(ptr) => ptr,
+                        RuntimeValue::DynamicArrayLiteral(ptr) => ptr,
                         _ => unreachable!(),
                     };
 
-                    // READ THE INDEX VALUE FROM THE REGISTER!
                     let idx = match self.get_register(index_reg) {
                         RuntimeValue::IntegerLiteral(i) => i as usize,
                         _ => unreachable!("Array index must be an integer"),
@@ -234,6 +278,17 @@ impl VynVM {
 
                     let heap_arr = match self.get_heap_obj(arr_ptr) {
                         HeapObject::FixedArray { elements, .. } => elements[idx],
+                        HeapObject::DynamicArray { elements, .. } => {
+                            if idx > elements.len() {
+                                return Err(VynError::IndexOutOfBounds {
+                                    size: elements.len(),
+                                    idx: idx as i64,
+                                    span: self.debug_info.get_span(self.ip),
+                                });
+                            }
+
+                            elements[idx]
+                        }
                         _ => unreachable!(),
                     };
 

@@ -147,6 +147,9 @@ fn is_register_operand(opcode: &OpCode, operand_index: usize) -> bool {
         OpCode::ArrayNewFixed => {
             operand_index == 0 // first operand is dest
         }
+        OpCode::ArrayNewDynamic => {
+            operand_index == 0 // first operand is dest
+        }
 
         OpCode::ArraySet => {
             // operand 0: array_reg (register)
@@ -155,6 +158,7 @@ fn is_register_operand(opcode: &OpCode, operand_index: usize) -> bool {
             operand_index == 0 || operand_index == 2
         }
         OpCode::ArrayGet => true,
+        OpCode::ArrayPush => true,
 
         OpCode::Halt => false,
     }

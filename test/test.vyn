@@ -1,6 +1,7 @@
-let arr: [2][3]Int = [[1, 2, 3], [9, 6, 3]];
-
-stdout# arr::0::0
-arr::0::0 = 10
+let arr: []Int = [1,2,3];
 
 stdout# arr
+
+arr::2 = 50
+
+stdout# arr::2

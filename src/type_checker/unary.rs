@@ -13,7 +13,7 @@ impl TypeChecker {
         right: &Expression,
         span: Span,
     ) -> Result<Type, ()> {
-        let right_type = self.check_expression(right)?;
+        let right_type = self.check_expression(right, None)?;
         let op_token = operator.get_token_type();
 
         match op_token {

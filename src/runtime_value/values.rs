@@ -9,8 +9,9 @@ pub enum RuntimeValue {
     IntegerLiteral(i32),
     FloatLiteral(f64),
     BooleanLiteral(bool),
-    StringLiteral(usize),     // pointer to a string in the string table
-    FixedArrayLiteral(usize), // points to an array in heap table
+    StringLiteral(usize),       // pointer to a string in the string table
+    FixedArrayLiteral(usize),   // points to a fixed array in heap table
+    DynamicArrayLiteral(usize), // points to a dynamic array in heap table
     NilLiteral,
 }
 
@@ -97,7 +98,9 @@ impl RuntimeValue {
             RuntimeValue::FloatLiteral(_) => RuntimeType::Float,
             RuntimeValue::BooleanLiteral(_) => RuntimeType::Boolean,
             RuntimeValue::StringLiteral(_) => RuntimeType::String,
-            RuntimeValue::FixedArrayLiteral(_) => RuntimeType::Array,
+            RuntimeValue::FixedArrayLiteral(_) | RuntimeValue::DynamicArrayLiteral(_) => {
+                RuntimeType::Array
+            }
             RuntimeValue::NilLiteral => RuntimeType::Nil,
         }
     }
@@ -134,6 +137,23 @@ impl RuntimeValue {
             RuntimeValue::FixedArrayLiteral(idx) => {
                 let elements = match &heap_table[*idx] {
                     HeapObject::FixedArray { elements, .. } => elements,
+                    _ => unreachable!(),
+                };
+
+                out.write_all(b"[")?;
+
+                for (i, elem) in elements.iter().enumerate() {
+                    elem.write_to(out, heap_table)?;
+                    if i != elements.len() - 1 {
+                        out.write_all(b", ")?;
+                    }
+                }
+
+                out.write_all(b"]")
+            }
+            RuntimeValue::DynamicArrayLiteral(idx) => {
+                let elements = match &heap_table[*idx] {
+                    HeapObject::DynamicArray { elements, .. } => elements,
                     _ => unreachable!(),
                 };
 

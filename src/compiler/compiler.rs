@@ -299,7 +299,7 @@ impl Compiler {
                 let target_type = self.get_expr_type(&target)?;
 
                 match target_type {
-                    Type::FixedArray(_, _) => {
+                    Type::FixedArray(_, _) | Type::DynamicArray(_) => {
                         self.emit(
                             OpCode::ArrayGet,
                             vec![dest as usize, target_reg as usize, property_reg as usize],
@@ -334,7 +334,7 @@ impl Compiler {
                 let target_type = self.get_expr_type(&target)?;
 
                 match target_type {
-                    Type::FixedArray(_, _) => {
+                    Type::FixedArray(_, _) | Type::DynamicArray(_) => {
                         self.emit(
                             OpCode::ArraySet,
                             vec![target_reg as usize, index, value_reg as usize],
@@ -366,8 +366,8 @@ impl Compiler {
         expected_type: Option<&Type>,
         span: Span,
     ) -> Option<u8> {
-        match expected_type {
-            Some(Type::FixedArray(t, size)) => {
+        match expected_type? {
+            Type::FixedArray(t, size) => {
                 let dest = self.allocate_register()?;
 
                 self.emit(OpCode::ArrayNewFixed, vec![dest as usize, *size], span);
@@ -387,14 +387,30 @@ impl Compiler {
                 Some(dest)
             }
 
-            _ => {
-                self.throw_error(VynError::TypeMismatch {
-                    expected: vec![],
-                    found: Type::Nil,
+            Type::DynamicArray(t) => {
+                let dest = self.allocate_register()?;
+
+                self.emit(
+                    OpCode::ArrayNewDynamic,
+                    vec![dest as usize, elements.len()],
                     span,
-                });
-                None
+                );
+                for elem in elements.iter() {
+                    let elem_reg = self.compile_expression(*elem.clone(), Some(t))?;
+
+                    self.emit(
+                        OpCode::ArrayPush,
+                        vec![dest as usize, elem_reg as usize],
+                        span,
+                    );
+
+                    self.free_register(elem_reg);
+                }
+
+                Some(dest)
             }
+
+            _ => unreachable!(),
         }
     }
 

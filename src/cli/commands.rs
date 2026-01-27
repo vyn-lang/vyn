@@ -61,26 +61,28 @@ impl CommandHandler {
         }
 
         // Execute the program
-        let mut vm = VynVM::new(
-            bytecode.instructions,
-            bytecode.constants,
-            bytecode.string_table,
-        );
+        let mut vm = VynVM::new(bytecode);
 
         let vm_timer_start = Instant::now();
+        let mut error = false;
         if let Err(e) = vm.execute() {
             if !self.args.quiet {
-                eprintln!();
                 e.report(&source);
             }
-            return Err(2);
+            error = true
         }
         let vm_timer_duration = vm_timer_start.elapsed();
 
         if self.args.time {
-            println!();
+            if !error {
+                println!();
+            }
             print_info(&format!("Compilation took {compile_timer_duration:?}"));
             print_info(&format!("Program took {vm_timer_duration:?}"));
+        }
+
+        if error {
+            return Err(2);
         }
 
         Ok(())

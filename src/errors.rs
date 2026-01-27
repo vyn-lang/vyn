@@ -1,6 +1,9 @@
 use crate::{
-    ast::ast::Node, runtime_value::values::RuntimeType, tokens::TokenType,
-    type_checker::type_checker::Type, utils::Span,
+    ast::ast::{Expr, Expression, Node},
+    runtime_value::values::RuntimeType,
+    tokens::TokenType,
+    type_checker::type_checker::Type,
+    utils::Span,
 };
 use colored::*;
 
@@ -42,6 +45,15 @@ pub enum VynError {
     },
     InvalidIndexing {
         target: Type,
+        span: Span,
+    },
+    TypeInfer {
+        expr: Expr,
+        span: Span,
+    },
+    ArrayLengthMismatch {
+        expected: usize,
+        got: usize,
         span: Span,
     },
     IndexOutOfBounds {
@@ -146,6 +158,8 @@ impl VynError {
             VynError::TypeAliasRedeclaration { span, .. } => *span,
             VynError::ImmutableMutation { span, .. } => *span,
             VynError::LeftHandAssignment { span, .. } => *span,
+            VynError::TypeInfer { span, .. } => *span,
+            VynError::ArrayLengthMismatch { span, .. } => *span,
 
             VynError::UnknownAST { span, .. } => *span,
             VynError::UndefinedIdentifier { span, .. } => *span,
@@ -177,7 +191,10 @@ impl VynError {
             VynError::ImmutableMutation { .. } => "Type",
             VynError::LeftHandAssignment { .. } => "Type",
             VynError::InvalidIndexing { .. } => "Type",
-            VynError::IndexOutOfBounds { .. } => "Type",
+            VynError::TypeInfer { .. } => "Type",
+            VynError::ArrayLengthMismatch { .. } => "Type",
+
+            VynError::IndexOutOfBounds { .. } => "Index",
 
             VynError::UnknownAST { .. } => "Compiler",
             VynError::UndefinedIdentifier { .. } => "Compiler",
@@ -212,6 +229,14 @@ impl VynError {
             }
             VynError::ExpectedType { got, .. } => {
                 format!("Expected type annotation, got '{got}' instead")
+            }
+            VynError::TypeInfer { expr, .. } => {
+                format!("Cannot infer type of expression '{expr}'")
+            }
+            VynError::ArrayLengthMismatch { expected, got, .. } => {
+                format!(
+                    "Array length mismatch, expected length '[{expected}]' but got '[{got}]' instead"
+                )
             }
             VynError::DivisionByZero { .. } => "Cannot divide by zero".to_string(),
             VynError::TypeAliasRedeclaration { name, .. } => {
@@ -384,6 +409,12 @@ impl VynError {
             VynError::InvalidTypeName { .. } => {
                 Some("Available types: Int, Float, Bool, String".to_string())
             }
+            VynError::TypeInfer { expr, .. } => {
+                Some(format!("Annotate a type for expression '{expr}'"))
+            }
+            VynError::ArrayLengthMismatch { expected, got, .. } => Some(format!(
+                "Consider changing the array length to '{expected}' or adjust the annotated length to '{got}"
+            )),
             VynError::DeclarationTypeMismatch { got, expected, .. } => Some(format!(
                 "Either change the declared type to '{}' or provide a value of type '{}'",
                 got, expected
@@ -517,8 +548,6 @@ impl VynError {
         if let Some(hint_text) = self.hint() {
             eprintln!("{} {}", "Hint:".bright_yellow(), hint_text.bright_white());
         }
-
-        eprintln!();
     }
 
     fn print_code_snippet(&self, source: &str, span: Span, highlight: bool) {
@@ -629,6 +658,7 @@ impl ErrorCollector {
     pub fn report_all(&self, source: &str) {
         for error in &self.errors {
             error.report(source);
+            println!()
         }
 
         if !self.errors.is_empty() {
