@@ -330,8 +330,7 @@ impl TypeChecker {
 
             Expr::Index { target, property } => {
                 let target_type = self.check_expression(target.as_ref(), expected_type.clone())?;
-                let property_type =
-                    self.check_expression(property.as_ref(), expected_type.clone())?;
+                let property_type = self.check_expression(property.as_ref(), None)?;
 
                 match target_type.clone() {
                     Type::Array(element_type, size) => {
@@ -386,7 +385,7 @@ impl TypeChecker {
                 new_value,
             } => {
                 let target_type = self.check_expression(target, expected_type.clone())?;
-                let property_type = self.check_expression(property, expected_type.clone())?;
+                let property_type = self.check_expression(property, None)?;
                 let new_value_type = self.check_expression(new_value, expected_type.clone())?;
 
                 match target_type {

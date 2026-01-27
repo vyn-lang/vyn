@@ -6,7 +6,7 @@ use crate::cli::commands::VERSION;
 #[derive(Parser)]
 #[command(name = "vyn")]
 #[command(version = VERSION)]
-#[command(about = "Vyn Programming Language", long_about = None)]
+#[command(about = "The Vyn Programming Language", long_about = None)]
 pub struct CliArgs {
     #[command(subcommand)]
     pub command: Commands,

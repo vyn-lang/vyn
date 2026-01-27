@@ -385,9 +385,8 @@ impl Parser {
             }
         }
 
-        self.advance();
-
         let rb_token_info = self.current_token().clone();
+        self.advance();
 
         let full_span = Span {
             line: lb_token_info.span.line,

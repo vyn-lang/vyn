@@ -292,11 +292,12 @@ impl Compiler {
             }
 
             Expr::Index { target, property } => {
-                let dest = self.allocate_register()?;
-                let target_reg = self.compile_expression(*target.clone(), None)?;
-                let property_reg = self.compile_expression(*property, None)?;
-
+                // Get the type BEFORE consuming target
                 let target_type = self.get_expr_type(&target)?;
+
+                let dest = self.allocate_register()?;
+                let target_reg = self.compile_expression(*target, None)?;
+                let property_reg = self.compile_expression(*property, None)?;
 
                 match target_type {
                     Type::Array(_, _) | Type::Sequence(_) => {
@@ -323,7 +324,10 @@ impl Compiler {
                 property,
                 new_value,
             } => {
-                let target_reg = self.compile_expression(*target.clone(), None)?;
+                // Get type BEFORE consuming target
+                let target_type = self.get_expr_type(&target)?;
+
+                let target_reg = self.compile_expression(*target, None)?;
 
                 let index = match property.node {
                     Expr::IntegerLiteral(v) => v as usize,
@@ -331,7 +335,6 @@ impl Compiler {
                 };
 
                 let value_reg = self.compile_expression(*new_value, None)?;
-                let target_type = self.get_expr_type(&target)?;
 
                 match target_type {
                     Type::Array(_, _) | Type::Sequence(_) => {

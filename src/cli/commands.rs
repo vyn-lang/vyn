@@ -12,7 +12,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
 
-pub const VERSION: &str = "0.1.0";
+pub const VERSION: &str = "0.12.0";
 
 pub struct CommandHandler {
     args: CliArgs,

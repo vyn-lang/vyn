@@ -9,9 +9,9 @@ pub enum RuntimeValue {
     IntegerLiteral(i32),
     FloatLiteral(f64),
     BooleanLiteral(bool),
-    StringLiteral(usize),       // pointer to a string in the string table
-    FixedArrayLiteral(usize),   // points to a fixed array in heap table
-    DynamicArrayLiteral(usize), // points to a dynamic array in heap table
+    StringLiteral(usize),   // pointer to a string in the string table
+    ArrayLiteral(usize),    // points to a fixed array in heap table
+    SequenceLiteral(usize), // points to a dynamic array in heap table
     NilLiteral,
 }
 
@@ -98,9 +98,7 @@ impl RuntimeValue {
             RuntimeValue::FloatLiteral(_) => RuntimeType::Float,
             RuntimeValue::BooleanLiteral(_) => RuntimeType::Boolean,
             RuntimeValue::StringLiteral(_) => RuntimeType::String,
-            RuntimeValue::FixedArrayLiteral(_) | RuntimeValue::DynamicArrayLiteral(_) => {
-                RuntimeType::Array
-            }
+            RuntimeValue::ArrayLiteral(_) | RuntimeValue::SequenceLiteral(_) => RuntimeType::Array,
             RuntimeValue::NilLiteral => RuntimeType::Nil,
         }
     }
@@ -134,9 +132,9 @@ impl RuntimeValue {
                 };
                 out.write_all(value.as_bytes())
             }
-            RuntimeValue::FixedArrayLiteral(idx) => {
+            RuntimeValue::ArrayLiteral(idx) => {
                 let elements = match &heap_table[*idx] {
-                    HeapObject::FixedArray { elements, .. } => elements,
+                    HeapObject::Array { elements, .. } => elements,
                     _ => unreachable!(),
                 };
 
@@ -151,9 +149,9 @@ impl RuntimeValue {
 
                 out.write_all(b"]")
             }
-            RuntimeValue::DynamicArrayLiteral(idx) => {
+            RuntimeValue::SequenceLiteral(idx) => {
                 let elements = match &heap_table[*idx] {
-                    HeapObject::DynamicArray { elements, .. } => elements,
+                    HeapObject::Array { elements, .. } => elements,
                     _ => unreachable!(),
                 };
 

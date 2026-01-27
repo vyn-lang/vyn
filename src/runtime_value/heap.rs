@@ -2,10 +2,10 @@ use crate::runtime_value::values::RuntimeValue;
 
 pub enum HeapObject {
     String(String),
-    DynamicArray {
+    Sequence {
         elements: Vec<RuntimeValue>,
     },
-    FixedArray {
+    Array {
         elements: Vec<RuntimeValue>,
         size: usize,
     },

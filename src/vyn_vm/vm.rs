@@ -187,25 +187,25 @@ impl VynVM {
                     let length = read_uint32(&self.instructions, self.ip + 2) as usize;
                     self.ip += 5;
 
-                    let heap_arr = HeapObject::FixedArray {
+                    let heap_arr = HeapObject::Array {
                         elements: vec![NIL; length], // Will patched by ARRAY_SET
                         size: length,
                     };
 
                     let arr_idx = self.push_heap(heap_arr);
-                    self.set_register(dest, RuntimeValue::FixedArrayLiteral(arr_idx));
+                    self.set_register(dest, RuntimeValue::ArrayLiteral(arr_idx));
                 }
                 OpCode::ARRAY_NEW_DYNAMIC => {
                     let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
                     let init_cap = read_uint32(&self.instructions, self.ip + 2) as usize;
                     self.ip += 5;
 
-                    let heap_arr = HeapObject::DynamicArray {
+                    let heap_arr = HeapObject::Sequence {
                         elements: Vec::with_capacity(init_cap),
                     };
 
                     let arr_idx = self.push_heap(heap_arr);
-                    self.set_register(dest, RuntimeValue::DynamicArrayLiteral(arr_idx));
+                    self.set_register(dest, RuntimeValue::SequenceLiteral(arr_idx));
                 }
                 OpCode::ARRAY_PUSH => {
                     let arr_reg_idx = read_uint8(&self.instructions, self.ip + 1) as usize;
@@ -215,16 +215,17 @@ impl VynVM {
                     let value = self.get_register(val_reg_idx).clone();
 
                     let heap_idx = match self.get_register(arr_reg_idx) {
-                        RuntimeValue::FixedArrayLiteral(idx) => idx,
-                        RuntimeValue::DynamicArrayLiteral(idx) => idx,
+                        RuntimeValue::SequenceLiteral(idx) => idx,
                         unknown => unreachable!("Expected array in register, got {unknown:?}"),
                     };
 
-                    match self.get_heap_obj(heap_idx) {
-                        HeapObject::DynamicArray { elements } => {
-                            elements.push(value);
+                    if let HeapObject::Sequence { elements } = self.get_heap_obj(heap_idx) {
+                        if elements.len() >= elements.capacity() {
+                            let new_capacity = elements.capacity() * 2;
+                            elements.reserve(new_capacity - elements.len());
                         }
-                        _ => unreachable!(),
+
+                        elements.push(value);
                     }
                 }
                 OpCode::ARRAY_SET => {
@@ -236,16 +237,16 @@ impl VynVM {
                     let value = self.get_register(val_reg_idx).clone();
 
                     let heap_idx = match self.get_register(arr_reg_idx) {
-                        RuntimeValue::FixedArrayLiteral(idx) => idx,
-                        RuntimeValue::DynamicArrayLiteral(idx) => idx,
+                        RuntimeValue::ArrayLiteral(idx) => idx,
+                        RuntimeValue::SequenceLiteral(idx) => idx,
                         unknown => unreachable!("Expected array in register, got {unknown:?}"),
                     };
 
                     match self.get_heap_obj(heap_idx) {
-                        HeapObject::FixedArray { elements, .. } => {
+                        HeapObject::Array { elements, .. } => {
                             elements[index] = value;
                         }
-                        HeapObject::DynamicArray { elements } => {
+                        HeapObject::Sequence { elements } => {
                             if index > elements.len() {
                                 return Err(VynError::IndexOutOfBounds {
                                     size: elements.len(),
@@ -266,8 +267,8 @@ impl VynVM {
                     self.ip += 3;
 
                     let arr_ptr = match self.get_register(arr_ptr_idx) {
-                        RuntimeValue::FixedArrayLiteral(ptr) => ptr,
-                        RuntimeValue::DynamicArrayLiteral(ptr) => ptr,
+                        RuntimeValue::ArrayLiteral(ptr) => ptr,
+                        RuntimeValue::SequenceLiteral(ptr) => ptr,
                         _ => unreachable!(),
                     };
 
@@ -277,8 +278,8 @@ impl VynVM {
                     };
 
                     let heap_arr = match self.get_heap_obj(arr_ptr) {
-                        HeapObject::FixedArray { elements, .. } => elements[idx],
-                        HeapObject::DynamicArray { elements, .. } => {
+                        HeapObject::Array { elements, .. } => elements[idx],
+                        HeapObject::Sequence { elements, .. } => {
                             if idx > elements.len() {
                                 return Err(VynError::IndexOutOfBounds {
                                     size: elements.len(),

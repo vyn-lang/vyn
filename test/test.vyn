@@ -1,7 +1,3 @@
-let arr: []Int = [1,2,3];
-
-stdout# arr
-
-arr::2 = 50
-
-stdout# arr::2
+stdout# "Welcome to Vyn!"
+stdout# 42
+stdout# 3.14
