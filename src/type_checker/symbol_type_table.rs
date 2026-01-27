@@ -16,9 +16,9 @@ pub struct SymbolType {
 
 #[derive(Clone)]
 pub struct SymbolTypeTable {
-    pub parent: Option<Rc<SymbolTypeTable>>, // Outer scope
+    pub parent: Option<Rc<SymbolTypeTable>>,
     store: HashMap<String, SymbolType>,
-    type_aliases: HashMap<String, SymbolType>,
+    type_aliases: HashMap<String, Type>,
 }
 
 impl SymbolTypeTable {
@@ -68,19 +68,11 @@ impl SymbolTypeTable {
             return Ok(s);
         }
 
-        // Check type aliases in current scope
-        if let Some(al_type) = self.type_aliases.get(ident) {
-            return Ok(al_type);
-        }
-
         // Walk up parent scopes
         let mut current = self.parent.as_ref();
         while let Some(parent) = current {
             if let Some(s) = parent.store.get(ident) {
                 return Ok(s);
-            }
-            if let Some(al_type) = parent.type_aliases.get(ident) {
-                return Ok(al_type);
             }
             current = parent.parent.as_ref();
         }
@@ -102,13 +94,7 @@ impl SymbolTypeTable {
             return Err(VynError::TypeAliasRedeclaration { name, span });
         }
 
-        let symbol = SymbolType {
-            symbol_type: an_type,
-            mutable: false,
-            span,
-        };
-
-        self.type_aliases.insert(name, symbol);
+        self.type_aliases.insert(name, an_type);
         Ok(())
     }
 
@@ -123,7 +109,6 @@ impl SymbolTypeTable {
     pub fn exit_scope(self) -> SymbolTypeTable {
         match self.parent {
             Some(parent_rc) => Rc::try_unwrap(parent_rc).unwrap_or_else(|rc| (*rc).clone()),
-            // This should ever occur unless called without a parent
             None => panic!("Cannot exit global scope"),
         }
     }

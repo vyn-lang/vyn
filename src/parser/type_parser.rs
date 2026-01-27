@@ -60,9 +60,19 @@ impl Parser {
                 Some(t.clone())
             }
             None => {
-                let al_type = self.type_table.aliases.get(type_name)?.clone();
-                self.advance();
-                Some(al_type)
+                // Check if it's a type alias
+                if let Some(al_type) = self.type_table.aliases.get(type_name) {
+                    let result = al_type.clone();
+                    self.advance();
+                    Some(result)
+                } else {
+                    self.errors.add(VynError::InvalidTypeName {
+                        got: type_name.clone(),
+                        span: current_token.span,
+                    });
+                    self.advance();
+                    None
+                }
             }
         };
 

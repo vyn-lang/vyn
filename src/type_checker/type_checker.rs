@@ -190,12 +190,14 @@ impl TypeChecker {
                     _ => unreachable!("Type alias identifier must be an identifier"),
                 };
 
-                if let Err(err) = self.symbol_type_table.enroll_type_alias(
-                    name,
-                    Type::from_anotated_type(value),
-                    span,
-                ) {
+                let resolved_type = Type::from_anotated_type(value);
+
+                if let Err(err) =
+                    self.symbol_type_table
+                        .enroll_type_alias(name, resolved_type, span)
+                {
                     self.throw_error(err);
+                    return Err(());
                 }
 
                 Ok(())
@@ -222,7 +224,18 @@ impl TypeChecker {
                 consequence,
                 alternate,
             } => {
-                self.check_expression(condition, None)?;
+                let condition_type = self.check_expression(condition, None)?;
+
+                // Verify condition is boolean
+                if condition_type != Type::Bool {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![Type::Bool],
+                        found: condition_type,
+                        span: condition.span,
+                    });
+                    return Err(());
+                }
+
                 self.check_statement(&consequence)?;
 
                 if let Some(alt) = alternate.as_ref() {
@@ -253,6 +266,7 @@ impl TypeChecker {
             Expr::BooleanLiteral(_) => Ok(Type::Bool),
             Expr::StringLiteral(_) => Ok(Type::String),
             Expr::NilLiteral => Ok(Type::Nil),
+
             Expr::ArrayLiteral { elements } => {
                 if elements.is_empty() && expected_type.is_none() {
                     self.throw_error(VynError::TypeInfer {
@@ -262,11 +276,18 @@ impl TypeChecker {
                     return Err(());
                 }
 
-                let exp_type = expected_type
-                    .clone()
-                    .unwrap_or(Type::Sequence(Box::new(Type::Nil)));
+                // Handle empty arrays with expected type
+                if elements.is_empty() {
+                    return Ok(expected_type.unwrap_or(Type::Sequence(Box::new(Type::Nil))));
+                }
+
+                let exp_type = expected_type.clone().unwrap_or_else(|| {
+                    // Infer type from first element if no expected type
+                    Type::Sequence(Box::new(Type::Nil))
+                });
+
                 match &exp_type {
-                    Type::Array(element_type, size) => {
+                    Type::Array(expected_element_type, size) => {
                         if elements.len() != *size {
                             self.throw_error(VynError::ArrayLengthMismatch {
                                 expected: *size,
@@ -276,13 +297,17 @@ impl TypeChecker {
                             return Err(());
                         }
 
-                        for (i, element) in elements.iter().enumerate() {
-                            let element_type =
-                                self.check_expression(element, Some(*element_type.clone()))?;
-                            if element_type != element_type.clone() {
+                        // Check each element against expected element type
+                        for element in elements {
+                            let actual_element_type = self.check_expression(
+                                element,
+                                Some((**expected_element_type).clone()),
+                            )?;
+
+                            if **expected_element_type != actual_element_type {
                                 self.throw_error(VynError::TypeMismatch {
-                                    expected: vec![element_type.clone()],
-                                    found: element_type,
+                                    expected: vec![(**expected_element_type).clone()],
+                                    found: actual_element_type,
                                     span: element.span,
                                 });
                                 return Err(());
@@ -291,14 +316,18 @@ impl TypeChecker {
 
                         Ok(exp_type)
                     }
-                    Type::Sequence(element_type) => {
+                    Type::Sequence(expected_element_type) => {
+                        // Check each element against expected element type
                         for element in elements {
-                            let element_type =
-                                self.check_expression(element, Some(*element_type.clone()))?;
-                            if element_type != element_type.clone() {
+                            let actual_element_type = self.check_expression(
+                                element,
+                                Some((**expected_element_type).clone()),
+                            )?;
+
+                            if **expected_element_type != actual_element_type {
                                 self.throw_error(VynError::TypeMismatch {
-                                    expected: vec![element_type.clone()],
-                                    found: element_type,
+                                    expected: vec![(**expected_element_type).clone()],
+                                    found: actual_element_type,
                                     span: element.span,
                                 });
                                 return Err(());
@@ -310,7 +339,7 @@ impl TypeChecker {
                     _ => {
                         self.throw_error(VynError::TypeMismatch {
                             expected: vec![exp_type],
-                            found: Type::Nil,
+                            found: Type::Sequence(Box::new(Type::Nil)),
                             span,
                         });
                         Err(())
@@ -329,26 +358,28 @@ impl TypeChecker {
             Expr::Unary { operator, right } => self.check_unary(operator, right, span),
 
             Expr::Index { target, property } => {
-                let target_type = self.check_expression(target.as_ref(), expected_type.clone())?;
+                let target_type = self.check_expression(target.as_ref(), None)?;
                 let property_type = self.check_expression(property.as_ref(), None)?;
+
+                // Property must be an integer
+                if property_type != Type::Integer {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![Type::Integer],
+                        found: property_type,
+                        span: property.span,
+                    });
+                    return Err(());
+                }
 
                 match target_type.clone() {
                     Type::Array(element_type, size) => {
-                        if property_type != Type::Integer {
-                            self.throw_error(VynError::TypeMismatch {
-                                expected: vec![Type::Integer],
-                                found: property_type,
-                                span,
-                            });
-                            return Err(());
-                        }
-
+                        // Check bounds if index is constant
                         if let Some(idx) = Type::evaluate_const_expr(property.as_ref()) {
                             if idx < 0 || idx >= size as i32 {
                                 self.throw_error(VynError::IndexOutOfBounds {
                                     size,
                                     idx: idx as i64,
-                                    span,
+                                    span: property.span,
                                 });
                                 return Err(());
                             }
@@ -356,18 +387,7 @@ impl TypeChecker {
 
                         Ok(*element_type)
                     }
-                    Type::Sequence(element_type) => {
-                        if property_type != Type::Integer {
-                            self.throw_error(VynError::TypeMismatch {
-                                expected: vec![Type::Integer],
-                                found: property_type,
-                                span,
-                            });
-                            return Err(());
-                        }
-
-                        Ok(*element_type)
-                    }
+                    Type::Sequence(element_type) => Ok(*element_type),
 
                     _ => {
                         self.throw_error(VynError::InvalidIndexing {
@@ -384,37 +404,41 @@ impl TypeChecker {
                 property,
                 new_value,
             } => {
-                let target_type = self.check_expression(target, expected_type.clone())?;
+                let target_type = self.check_expression(target, None)?;
                 let property_type = self.check_expression(property, None)?;
-                let new_value_type = self.check_expression(new_value, expected_type.clone())?;
+
+                // Property must be an integer (index)
+                if property_type != Type::Integer {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![Type::Integer],
+                        found: property_type,
+                        span: property.span,
+                    });
+                    return Err(());
+                }
 
                 match target_type {
                     Type::Array(element_type, size) => {
-                        if property_type != Type::Integer {
-                            self.throw_error(VynError::TypeMismatch {
-                                expected: vec![Type::Integer],
-                                found: property_type,
-                                span,
-                            });
-                            return Err(());
-                        }
-
+                        // Check bounds if index is constant
                         if let Some(idx) = Type::evaluate_const_expr(property.as_ref()) {
                             if idx < 0 || idx >= size as i32 {
                                 self.throw_error(VynError::IndexOutOfBounds {
                                     size,
                                     idx: idx as i64,
-                                    span,
+                                    span: property.span,
                                 });
                                 return Err(());
                             }
                         }
 
+                        let new_value_type =
+                            self.check_expression(new_value, Some((*element_type).clone()))?;
+
                         if *element_type != new_value_type {
                             self.throw_error(VynError::TypeMismatch {
-                                expected: vec![*element_type],
+                                expected: vec![*element_type.clone()],
                                 found: new_value_type,
-                                span,
+                                span: new_value.span,
                             });
                             return Err(());
                         }
@@ -423,20 +447,14 @@ impl TypeChecker {
                     }
 
                     Type::Sequence(element_type) => {
-                        if property_type != Type::Integer {
-                            self.throw_error(VynError::TypeMismatch {
-                                expected: vec![Type::Integer],
-                                found: property_type,
-                                span,
-                            });
-                            return Err(());
-                        }
+                        let new_value_type =
+                            self.check_expression(new_value, Some((*element_type).clone()))?;
 
                         if *element_type != new_value_type {
                             self.throw_error(VynError::TypeMismatch {
-                                expected: vec![*element_type],
+                                expected: vec![*element_type.clone()],
                                 found: new_value_type,
-                                span,
+                                span: new_value.span,
                             });
                             return Err(());
                         }
@@ -472,27 +490,32 @@ impl TypeChecker {
                     }
                 };
 
-                let value_type = self.check_expression(new_value, expected_type)?;
                 let ident_symbol = self.symbol_type_table.resolve_identifier(
                     &ident_name,
                     span,
                     &mut self.errors,
                 )?;
 
-                if !ident_symbol.mutable {
+                let is_mutable = ident_symbol.mutable;
+                let ident_span = ident_symbol.span;
+                let expected_type = ident_symbol.symbol_type.clone();
+
+                if !is_mutable {
                     self.throw_error(VynError::ImmutableMutation {
                         identifier: ident_name,
-                        span: ident_symbol.span,
+                        span: ident_span,
                         mutation_span: span,
                     });
                     return Err(());
                 }
 
-                if ident_symbol.symbol_type != value_type {
+                let value_type = self.check_expression(new_value, Some(expected_type.clone()))?;
+
+                if expected_type != value_type {
                     self.throw_error(VynError::TypeMismatch {
-                        expected: vec![ident_symbol.symbol_type.clone()],
+                        expected: vec![expected_type],
                         found: value_type,
-                        span,
+                        span: new_value.span,
                     });
                     return Err(());
                 }
@@ -500,7 +523,13 @@ impl TypeChecker {
                 Ok(value_type)
             }
 
-            _ => unreachable!("Unknown expression type {:#?}", expr.node),
+            _ => {
+                self.throw_error(VynError::TypeInfer {
+                    expr: expr.node.clone(),
+                    span,
+                });
+                Err(())
+            }
         }
     }
 
