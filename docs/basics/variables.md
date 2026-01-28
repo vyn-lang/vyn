@@ -40,6 +40,47 @@ x = 15  // Also OK
 
 The `@` symbol indicates that this variable's value can change over time.
 
+### Mutating Array Elements
+
+Mutable variables are required when modifying array elements:
+
+```vyn
+let arr: [3]Int = [1, 2, 3]
+arr::1 = 10  // Error! arr is immutable
+
+let @mut_arr: [3]Int = [1, 2, 3]
+mut_arr::1 = 10  // OK! mut_arr is mutable
+stdout# mut_arr  // Outputs: [1, 10, 3]
+```
+
+## Static Variables
+
+Static variables are compile-time constants that never change. They're declared with the `static` keyword and are often used for configuration values or array sizes:
+
+```vyn
+static MAX_USERS: Int = 100
+static PI: Float = 3.14159
+static APP_NAME: String = "MyApp"
+```
+
+Key properties of static variables:
+
+- **Compile-time evaluation**: Their values must be known at compile time
+- **Cannot be mutated**: Static variables are always immutable
+- **Used in type annotations**: Static integers can be used to define array sizes
+
+```vyn
+static ARRAY_SIZE: Int = 5
+let numbers: [ARRAY_SIZE]Int = [1, 2, 3, 4, 5]
+```
+
+Attempting to mutate a static variable results in an error:
+
+```vyn
+static MAX_SCORE: Int = 100
+MAX_SCORE = 200  // Error! Cannot mutate static variable
+```
+
 ## Type Annotations
 
 All variables must have a type annotation:
@@ -70,6 +111,10 @@ Use semicolons for clarity or omit them for cleaner code - it's your choice!
 ## Examples
 
 ```vyn
+// Static constants
+static MAX_CONNECTIONS: Int = 1000
+static DEFAULT_TIMEOUT: Float = 30.0
+
 // Immutable variables
 let pi: Float = 3.14159
 let greeting: String = "Hello"
@@ -80,6 +125,11 @@ counter = counter + 1
 counter = counter + 1
 stdout# counter  // Outputs: 2
 
+// Array with static size
+static BUFFER_SIZE: Int = 256
+let @buffer: [BUFFER_SIZE]Int = [0, 0, 0, ...]
+buffer::0 = 42
+
 // Multiple variables
 let width: Int = 100
 let height: Int = 50
@@ -88,10 +138,12 @@ let area: Int = width * height
 
 ## Best Practices
 
-- Use immutable variables by default
+- Use `static` for compile-time constants that never change
+- Use immutable variables (`let`) by default for runtime values
 - Only use `@` when you actually need to modify a variable
 - Choose descriptive variable names
 - Group related variable declarations together
+- Use static variables for array sizes to make code more maintainable
 
 ## Next Steps
 
