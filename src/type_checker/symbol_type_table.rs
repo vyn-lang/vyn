@@ -12,6 +12,13 @@ pub struct SymbolType {
     pub symbol_type: Type,
     pub span: Span,
     pub mutable: bool,
+    pub is_static: bool,
+}
+
+impl SymbolType {
+    pub fn is_static(&self) -> bool {
+        self.is_static
+    }
 }
 
 #[derive(Clone)]
@@ -51,6 +58,34 @@ impl SymbolTypeTable {
             symbol_type: t,
             span,
             mutable,
+            is_static: false,
+        };
+
+        self.store.insert(ident, symbol_type);
+        Ok(())
+    }
+
+    pub fn declare_static_identifier(
+        &mut self,
+        ident: String,
+        t: Type,
+        span: Span,
+        errors: &mut ErrorCollector,
+    ) -> Result<(), ()> {
+        if let Some(existing) = self.store.get(&ident) {
+            errors.add(VynError::VariableRedeclaration {
+                name: ident,
+                original_span: existing.span,
+                redeclaration_span: span,
+            });
+            return Err(());
+        }
+
+        let symbol_type = SymbolType {
+            symbol_type: t,
+            span,
+            mutable: false,
+            is_static: true,
         };
 
         self.store.insert(ident, symbol_type);

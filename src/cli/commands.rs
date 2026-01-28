@@ -5,6 +5,8 @@ use crate::compiler::compiler::Compiler;
 use crate::compiler::disassembler::disassemble;
 use crate::lexer::Lexer;
 use crate::parser::parser::Parser;
+use crate::type_checker::static_evaluator::StaticEvaluator;
+use crate::type_checker::type_checker::TypeChecker;
 use crate::utils::print_info;
 use crate::vyn_vm::vm::VynVM;
 use colored::*;
@@ -127,10 +129,25 @@ impl CommandHandler {
         tracker.complete_phase(Phase::Parsing);
         let parsing_timer_duration = parsing_timer_start.elapsed();
 
+        // Static evaluation
+        let static_eval_timer_start = Instant::now();
+        tracker.begin_phase(Phase::StaticEvaluation);
+        let mut static_eval = StaticEvaluator::new();
+        let mut static_errors = crate::error_handler::error_collector::ErrorCollector::new();
+        if let Err(_) = static_eval.evaluate_program(&program, &mut static_errors) {
+            tracker.clear_display();
+            if !self.args.quiet {
+                static_errors.report_all(&source);
+            }
+            return Err(1);
+        }
+        tracker.complete_phase(Phase::StaticEvaluation);
+        let static_eval_timer_duration = static_eval_timer_start.elapsed();
+
         // Type check
         let tc_timer_start = Instant::now();
         tracker.begin_phase(Phase::TypeChecking);
-        let mut type_checker = crate::type_checker::type_checker::TypeChecker::new();
+        let mut type_checker = TypeChecker::new(&static_eval);
         if let Err(errors) = type_checker.check_program(&program) {
             tracker.clear_display();
             if !self.args.quiet {
@@ -155,9 +172,15 @@ impl CommandHandler {
             println!();
             print_info(&format!("Tokenization took {tokenizing_timer_duration:?}"));
             print_info(&format!("Parsing took {parsing_timer_duration:?}"));
+            print_info(&format!(
+                "Static evaluation took {static_eval_timer_duration:?}"
+            ));
             print_info(&format!("Type checking took {tc_timer_duration:?}"));
 
-            let total = tokenizing_timer_duration + parsing_timer_duration + tc_timer_duration;
+            let total = tokenizing_timer_duration
+                + parsing_timer_duration
+                + static_eval_timer_duration
+                + tc_timer_duration;
 
             print_info(&format!("Compilation took {total:?}"));
         }
@@ -223,9 +246,22 @@ impl CommandHandler {
         };
         tracker.complete_phase(Phase::Parsing);
 
+        // Static evaluation
+        tracker.begin_phase(Phase::StaticEvaluation);
+        let mut static_eval = StaticEvaluator::new();
+        let mut static_errors = crate::error_handler::error_collector::ErrorCollector::new();
+        if let Err(_) = static_eval.evaluate_program(&program, &mut static_errors) {
+            tracker.clear_display();
+            if !self.args.quiet {
+                static_errors.report_all(source);
+            }
+            return Err(1);
+        }
+        tracker.complete_phase(Phase::StaticEvaluation);
+
         // Type check
         tracker.begin_phase(Phase::TypeChecking);
-        let mut type_checker = crate::type_checker::type_checker::TypeChecker::new();
+        let mut type_checker = crate::type_checker::type_checker::TypeChecker::new(&static_eval);
         if let Err(errors) = type_checker.check_program(&program) {
             tracker.clear_display();
             if !self.args.quiet {
@@ -237,7 +273,7 @@ impl CommandHandler {
 
         // Compile
         tracker.begin_phase(Phase::Compiling);
-        let mut compiler = Compiler::new();
+        let mut compiler = Compiler::new(&static_eval);
         let bytecode = match compiler.compile_program(program) {
             Ok(bc) => bc,
             Err(errors) => {

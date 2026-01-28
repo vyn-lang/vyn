@@ -28,8 +28,56 @@ impl VynError {
             VynError::TypeInfer { expr, .. } => {
                 Some(format!("Annotate a type for expression '{expr}'"))
             }
+            VynError::StaticRequiresConstant { .. } => Some(format!(
+                "Consider changing the variable signiture to be a 'let' variable or change the value to a static value",
+            )),
+            VynError::CircularStaticDependency { name, .. } => {
+            Some(format!(
+                "Static variable '{}' depends on itself directly or indirectly. Break the circular reference",
+                name
+            ))
+        }
+        VynError::UndefinedStatic { name, .. } => {
+            Some(format!(
+                "Declare static variable '{}' before using it in constant expressions",
+                name
+            ))
+        }
+        VynError::StaticEvaluationFailed { name, .. } => {
+            Some(format!(
+                "Ensure static variable '{}' has a valid compile-time constant value",
+                name
+            ))
+        }
+        VynError::NotStaticExpression { .. } => {
+            Some("Use only literals, static variables, and compile-time operations".to_string())
+        }
+        VynError::InvalidStaticOperation { .. } => {
+            Some("Only basic arithmetic operations (+, -, *, /, ^) are allowed in static expressions".to_string())
+        }
+        VynError::StaticOverflow { .. } => {
+            Some("Use smaller values or change the operation to prevent overflow".to_string())
+        }
+        VynError::NegativeExponent { .. } => {
+            Some("Exponents in compile-time expressions must be non-negative integers".to_string())
+        }
+        VynError::NegativeArraySize { .. } => {
+            Some("Array size must be a positive integer".to_string())
+        }
+        VynError::ArraySizeNotStatic { .. } => {
+            Some("Use a literal number or static variable for array size".to_string())
+        }
+        VynError::InvalidUnaryOperator { .. } => {
+            Some("Only '+', '-', and '!' operators are allowed in constant expressions".to_string())
+        }
+        VynError::InvalidBinaryOperator { .. } => {
+            Some("Only arithmetic operators (+, -, *, /, ^) are allowed in constant expressions".to_string())
+        }
+            VynError::StaticMutation { .. } => Some(format!(
+                "Consider changing the variable signiture to be a 'let' variable or remove the assignment expression",
+            )),
             VynError::ArrayLengthMismatch { expected, got, .. } => Some(format!(
-                "Consider changing the array length to '{expected}' or adjust the annotated length to '{got}"
+                "Consider changing the array length to '{expected}' or adjust the annotated length to '{got}'"
             )),
             VynError::DeclarationTypeMismatch { got, expected, .. } => Some(format!(
                 "Either change the declared type to '{}' or provide a value of type '{}'",

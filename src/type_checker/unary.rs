@@ -6,42 +6,45 @@ use crate::{
     utils::Span,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub(crate) fn check_unary(
         &mut self,
-        operator: &Token,
+        operator: &crate::tokens::Token,
         right: &Expression,
-        span: Span,
+        span: crate::utils::Span,
     ) -> Result<Type, ()> {
         let right_type = self.check_expression(right, None)?;
-        let op_token = operator.get_token_type();
 
-        match op_token {
-            TokenType::Not => {
-                if right_type != Type::Bool {
-                    self.throw_error(VynError::InvalidUnaryOp {
-                        operator: op_token,
-                        operand_type: right_type,
-                        span,
-                    });
-                    return Err(());
-                }
-                Ok(Type::Bool)
-            }
-
-            TokenType::Minus => {
+        match operator.get_token_type() {
+            TokenType::Minus | TokenType::Plus => {
                 if right_type != Type::Integer && right_type != Type::Float {
-                    self.throw_error(VynError::InvalidUnaryOp {
-                        operator: op_token,
-                        operand_type: right_type,
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![Type::Integer, Type::Float],
+                        found: right_type,
                         span,
                     });
                     return Err(());
                 }
                 Ok(right_type)
             }
-
-            _ => unreachable!("Unknown unary operator"),
+            TokenType::Bang => {
+                if right_type != Type::Bool {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![Type::Bool],
+                        found: right_type,
+                        span,
+                    });
+                    return Err(());
+                }
+                Ok(Type::Bool)
+            }
+            _ => {
+                self.throw_error(VynError::InvalidUnaryOperator {
+                    operator: operator.clone(),
+                    span,
+                });
+                Err(())
+            }
         }
     }
 }

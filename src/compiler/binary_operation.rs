@@ -9,7 +9,7 @@ use crate::{
     utils::Span,
 };
 
-impl Compiler {
+impl Compiler<'_> {
     pub(crate) fn compile_binary_expr(
         &mut self,
         left_type: Type,

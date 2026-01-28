@@ -6,108 +6,81 @@ use crate::{
     utils::Span,
 };
 
-impl TypeChecker {
+impl TypeChecker<'_> {
     pub(crate) fn check_binary_expr(
         &mut self,
-        operator: &Token,
+        operator: &crate::tokens::Token,
         left: &Expression,
         right: &Expression,
-        span: Span,
+        span: crate::utils::Span,
     ) -> Result<Type, ()> {
-        // If either side has an error, propagate it (stops cascading errors!)
         let left_type = self.check_expression(left, None)?;
         let right_type = self.check_expression(right, None)?;
-        let op_tok = operator.get_token_type();
 
-        match op_tok {
-            // Arithmetic
-            TokenType::Plus => {
+        match operator.get_token_type() {
+            TokenType::Plus
+            | TokenType::Minus
+            | TokenType::Asterisk
+            | TokenType::Slash
+            | TokenType::Caret => {
                 if left_type != right_type {
-                    self.throw_error(VynError::InvalidBinaryOp {
-                        operator: op_tok,
-                        left_type,
-                        right_type,
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![left_type.clone()],
+                        found: right_type,
                         span,
                     });
                     return Err(());
                 }
 
-                // Both must be numeric or string
-                if left_type == Type::Integer
-                    || left_type == Type::Float
-                    || left_type == Type::String
-                {
-                    return Ok(left_type);
+                if left_type != Type::Integer && left_type != Type::Float {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![Type::Integer, Type::Float],
+                        found: left_type,
+                        span,
+                    });
+                    return Err(());
                 }
 
-                self.throw_error(VynError::InvalidBinaryOp {
-                    operator: op_tok,
-                    left_type,
-                    right_type,
+                Ok(left_type)
+            }
+            TokenType::Equal
+            | TokenType::NotEqual
+            | TokenType::GreaterThan
+            | TokenType::GreaterThanEqual
+            | TokenType::LessThan
+            | TokenType::LessThanEqual => {
+                if left_type != right_type {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![left_type.clone()],
+                        found: right_type,
+                        span,
+                    });
+                    return Err(());
+                }
+                Ok(Type::Bool)
+            }
+            TokenType::And | TokenType::Or => {
+                if left_type != Type::Bool || right_type != Type::Bool {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![Type::Bool],
+                        found: if left_type != Type::Bool {
+                            left_type
+                        } else {
+                            right_type
+                        },
+                        span,
+                    });
+                    return Err(());
+                }
+                Ok(Type::Bool)
+            }
+            _ => {
+                self.throw_error(VynError::InvalidBinaryOperator {
+                    operator: operator.clone(),
                     span,
                 });
                 Err(())
             }
-
-            TokenType::Minus | TokenType::Asterisk | TokenType::Slash | TokenType::Caret => {
-                self.require_numeric_types(op_tok, left_type, right_type, span)
-            }
-
-            // Comparison - returns Bool, not the operand type!
-            TokenType::LessThan
-            | TokenType::LessThanEqual
-            | TokenType::GreaterThan
-            | TokenType::GreaterThanEqual => {
-                self.require_numeric_types(op_tok, left_type, right_type, span)?;
-                Ok(Type::Bool)
-            }
-
-            // Equality
-            TokenType::Equal | TokenType::NotEqual => {
-                if left_type != right_type {
-                    self.throw_error(VynError::InvalidBinaryOp {
-                        operator: op_tok,
-                        left_type,
-                        right_type,
-                        span,
-                    });
-                    return Err(());
-                }
-
-                Ok(Type::Bool)
-            }
-
-            _ => unreachable!("Unknown binary operator"),
         }
-    }
-
-    fn require_numeric_types(
-        &mut self,
-        op: TokenType,
-        left: Type,
-        right: Type,
-        span: Span,
-    ) -> Result<Type, ()> {
-        if left != right {
-            self.throw_error(VynError::InvalidBinaryOp {
-                operator: op,
-                left_type: left,
-                right_type: right,
-                span,
-            });
-            return Err(());
-        }
-
-        if left != Type::Integer && left != Type::Float {
-            self.throw_error(VynError::InvalidBinaryOp {
-                operator: op,
-                left_type: left.clone(),
-                right_type: right,
-                span,
-            });
-            return Err(());
-        }
-
-        Ok(left)
     }
 }

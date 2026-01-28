@@ -68,6 +68,7 @@ pub enum Token {
     Type,
     Return,
     Stdout,
+    Static,
 }
 
 impl fmt::Display for Token {
@@ -146,6 +147,7 @@ pub enum TokenType {
     Not,
     Return,
     Stdout,
+    Static,
 }
 
 impl fmt::Display for TokenType {
@@ -210,6 +212,7 @@ impl fmt::Display for TokenType {
             TokenType::Not => write!(f, "not"),
             TokenType::Return => write!(f, "return"),
             TokenType::Stdout => write!(f, "stdout"),
+            TokenType::Static => write!(f, "static"),
         }
     }
 }
@@ -230,6 +233,7 @@ impl Token {
             "else" => Token::Else,
             "return" => Token::Return,
             "stdout" => Token::Stdout,
+            "static" => Token::Static,
             _ => Token::Identifier(identifier.to_string()),
         }
     }
@@ -295,6 +299,7 @@ impl Token {
             Token::Not => TokenType::Not,
             Token::Return => TokenType::Return,
             Token::Stdout => TokenType::Stdout,
+            Token::Static => TokenType::Static,
         }
     }
 }

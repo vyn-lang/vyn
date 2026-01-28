@@ -4,8 +4,7 @@ use crate::{
         type_annotation::TypeAnnotation,
     },
     error_handler::{error_collector::ErrorCollector, errors::VynError},
-    tokens::TokenType,
-    type_checker::symbol_type_table::SymbolTypeTable,
+    type_checker::{static_evaluator::StaticEvaluator, symbol_type_table::SymbolTypeTable},
     utils::throw_error,
 };
 use core::fmt;
@@ -43,88 +42,91 @@ impl fmt::Display for Type {
 }
 
 impl Type {
-    pub fn from_anotated_type(an_type: &TypeAnnotation) -> Self {
+    pub fn from_anotated_type(
+        an_type: &TypeAnnotation,
+        static_eval: &StaticEvaluator,
+        errors: &mut ErrorCollector,
+    ) -> Self {
         match an_type {
             TypeAnnotation::StringType => Self::String,
             TypeAnnotation::IntegerType => Self::Integer,
             TypeAnnotation::FloatType => Self::Float,
             TypeAnnotation::BooleanType => Self::Bool,
             TypeAnnotation::ArrayType(ta, size_expr) => {
-                let t = Self::from_anotated_type(ta.as_ref());
-                let size = Self::evaluate_const_expr(size_expr)
-                    .and_then(|v| if v >= 0 { Some(v as usize) } else { None })
-                    .unwrap_or(0);
+                let t = Self::from_anotated_type(ta.as_ref(), static_eval, errors);
+
+                // Try to evaluate the size expression
+                let size = Self::evaluate_array_size(size_expr, static_eval, errors).unwrap_or(0);
+
                 Type::Array(Box::new(t), size)
             }
             TypeAnnotation::SequenceType(ta) => {
-                let t = Type::from_anotated_type(ta);
+                let t = Type::from_anotated_type(ta, static_eval, errors);
                 Type::Sequence(Box::new(t))
             }
         }
     }
 
-    /// Evaluates a constant expression to an i64 value
-    /// Returns None if the expression cannot be evaluated at compile time
-    fn evaluate_const_expr(expr: &Expression) -> Option<i32> {
+    /// Evaluate array size expression using the static evaluator
+    fn evaluate_array_size(
+        expr: &Expression,
+        static_eval: &StaticEvaluator,
+        errors: &mut ErrorCollector,
+    ) -> Option<usize> {
         match &expr.node {
-            Expr::IntegerLiteral(n) => Some(*n),
-
-            Expr::Unary { operator, right } => {
-                let right_val = Self::evaluate_const_expr(right)?;
-
-                match operator.get_token_type() {
-                    TokenType::Minus => Some(-right_val),
-                    TokenType::Plus => Some(right_val),
-                    TokenType::Bang => Some(if right_val == 0 { 1 } else { 0 }),
-                    _ => None,
+            // Direct integer literal
+            Expr::IntegerLiteral(n) => {
+                if *n >= 0 {
+                    Some(*n as usize)
+                } else {
+                    errors.add(VynError::NegativeArraySize {
+                        size: *n,
+                        span: expr.span,
+                    });
+                    None
                 }
             }
 
-            Expr::BinaryOperation {
-                left,
-                operator,
-                right,
-            } => {
-                let left_val = Self::evaluate_const_expr(left)?;
-                let right_val = Self::evaluate_const_expr(right)?;
-
-                match operator.get_token_type() {
-                    TokenType::Plus => Some(left_val.checked_add(right_val)?),
-                    TokenType::Minus => Some(left_val.checked_sub(right_val)?),
-                    TokenType::Asterisk => Some(left_val.checked_mul(right_val)?),
-                    TokenType::Slash => {
-                        if right_val != 0 {
-                            Some(left_val.checked_div(right_val)?)
-                        } else {
-                            None
-                        }
+            // Identifier reference to a static
+            Expr::Identifier(name) => {
+                if let Some(n) = static_eval.get_static_int(name) {
+                    if n >= 0 {
+                        Some(n as usize)
+                    } else {
+                        errors.add(VynError::NegativeArraySize {
+                            size: n,
+                            span: expr.span,
+                        });
+                        None
                     }
-                    TokenType::Caret => {
-                        if right_val < 0 {
-                            return None;
-                        }
-                        Some(left_val.checked_pow(right_val as u32)?)
-                    }
-
-                    _ => None,
+                } else {
+                    errors.add(VynError::ArraySizeNotStatic { span: expr.span });
+                    None
                 }
             }
 
-            _ => None,
+            // For complex expressions, we could try to evaluate them
+            // but for now, just report an error
+            _ => {
+                errors.add(VynError::ArraySizeNotStatic { span: expr.span });
+                None
+            }
         }
     }
 }
 
-pub struct TypeChecker {
-    symbol_type_table: SymbolTypeTable,
-    errors: ErrorCollector,
+pub struct TypeChecker<'a> {
+    pub(crate) symbol_type_table: SymbolTypeTable,
+    pub(crate) errors: ErrorCollector,
+    static_eval: &'a StaticEvaluator,
 }
 
-impl TypeChecker {
-    pub fn new() -> Self {
+impl<'a> TypeChecker<'a> {
+    pub fn new(static_eval: &'a StaticEvaluator) -> Self {
         Self {
             symbol_type_table: SymbolTypeTable::new(),
             errors: ErrorCollector::new(),
+            static_eval,
         }
     }
 
@@ -156,7 +158,8 @@ impl TypeChecker {
                 annotated_type,
                 mutable,
             } => {
-                let expected_type = Type::from_anotated_type(annotated_type);
+                let expected_type =
+                    Type::from_anotated_type(annotated_type, self.static_eval, &mut self.errors);
                 let value_type = self.check_expression(value, Some(expected_type.clone()))?;
 
                 let var_name = match &identifier.node {
@@ -184,13 +187,50 @@ impl TypeChecker {
                 Ok(())
             }
 
+            Stmt::StaticVariableDeclaration {
+                identifier,
+                value,
+                annotated_type,
+            } => {
+                let expected_type =
+                    Type::from_anotated_type(annotated_type, self.static_eval, &mut self.errors);
+
+                // Static values should already be validated by static_eval
+                // Just check the type matches
+                let value_type = self.check_expression(value, Some(expected_type.clone()))?;
+
+                let var_name = match &identifier.node {
+                    Expr::Identifier(name) => name.clone(),
+                    _ => unreachable!("Variable name must be an identifier"),
+                };
+
+                self.symbol_type_table.declare_static_identifier(
+                    var_name,
+                    expected_type.clone(),
+                    span,
+                    &mut self.errors,
+                )?;
+
+                if expected_type != value_type {
+                    self.throw_error(VynError::DeclarationTypeMismatch {
+                        expected: expected_type.clone(),
+                        got: value_type,
+                        span,
+                    });
+                    return Err(());
+                }
+
+                Ok(())
+            }
+
             Stmt::TypeAliasDeclaration { identifier, value } => {
                 let name = match &identifier.node {
                     Expr::Identifier(n) => n.clone(),
                     _ => unreachable!("Type alias identifier must be an identifier"),
                 };
 
-                let resolved_type = Type::from_anotated_type(value);
+                let resolved_type =
+                    Type::from_anotated_type(value, self.static_eval, &mut self.errors);
 
                 if let Err(err) =
                     self.symbol_type_table
@@ -226,7 +266,6 @@ impl TypeChecker {
             } => {
                 let condition_type = self.check_expression(condition, None)?;
 
-                // Verify condition is boolean
                 if condition_type != Type::Bool {
                     self.throw_error(VynError::TypeMismatch {
                         expected: vec![Type::Bool],
@@ -276,70 +315,64 @@ impl TypeChecker {
                     return Err(());
                 }
 
-                // Handle empty arrays with expected type
-                if elements.is_empty() {
-                    return Ok(expected_type.unwrap_or(Type::Sequence(Box::new(Type::Nil))));
-                }
+                let exp_type = if let Some(t) = expected_type {
+                    t
+                } else {
+                    let first_elem_type = self.check_expression(&elements[0], None)?;
+                    Type::Sequence(Box::new(first_elem_type))
+                };
 
-                let exp_type = expected_type.clone().unwrap_or_else(|| {
-                    // Infer type from first element if no expected type
-                    Type::Sequence(Box::new(Type::Nil))
-                });
-
-                match &exp_type {
-                    Type::Array(expected_element_type, size) => {
-                        if elements.len() != *size {
+                match exp_type.clone() {
+                    Type::Array(array_type, size) => {
+                        if elements.len() != size {
                             self.throw_error(VynError::ArrayLengthMismatch {
-                                expected: *size,
+                                expected: size,
                                 got: elements.len(),
                                 span,
                             });
                             return Err(());
                         }
 
-                        // Check each element against expected element type
-                        for element in elements {
-                            let actual_element_type = self.check_expression(
-                                element,
-                                Some((**expected_element_type).clone()),
-                            )?;
-
-                            if **expected_element_type != actual_element_type {
+                        for elem in elements {
+                            let elem_type =
+                                self.check_expression(elem.as_ref(), Some(*array_type.clone()))?;
+                            if elem_type != *array_type {
                                 self.throw_error(VynError::TypeMismatch {
-                                    expected: vec![(**expected_element_type).clone()],
-                                    found: actual_element_type,
-                                    span: element.span,
+                                    expected: vec![*array_type.clone()],
+                                    found: elem_type,
+                                    span: elem.span,
                                 });
                                 return Err(());
                             }
                         }
 
-                        Ok(exp_type)
+                        Ok(Type::Array(array_type, size))
                     }
-                    Type::Sequence(expected_element_type) => {
-                        // Check each element against expected element type
-                        for element in elements {
-                            let actual_element_type = self.check_expression(
-                                element,
-                                Some((**expected_element_type).clone()),
-                            )?;
+                    Type::Sequence(seq_type) => {
+                        if elements.is_empty() {
+                            return Ok(Type::Sequence(seq_type));
+                        }
 
-                            if **expected_element_type != actual_element_type {
+                        for elem in elements {
+                            let elem_type =
+                                self.check_expression(elem.as_ref(), Some(*seq_type.clone()))?;
+                            if elem_type != *seq_type {
                                 self.throw_error(VynError::TypeMismatch {
-                                    expected: vec![(**expected_element_type).clone()],
-                                    found: actual_element_type,
-                                    span: element.span,
+                                    expected: vec![*seq_type.clone()],
+                                    found: elem_type,
+                                    span: elem.span,
                                 });
                                 return Err(());
                             }
                         }
 
-                        Ok(exp_type)
+                        Ok(Type::Sequence(seq_type))
                     }
-                    _ => {
+
+                    unknown => {
                         self.throw_error(VynError::TypeMismatch {
                             expected: vec![exp_type],
-                            found: Type::Sequence(Box::new(Type::Nil)),
+                            found: unknown,
                             span,
                         });
                         Err(())
@@ -361,7 +394,6 @@ impl TypeChecker {
                 let target_type = self.check_expression(target.as_ref(), None)?;
                 let property_type = self.check_expression(property.as_ref(), None)?;
 
-                // Property must be an integer
                 if property_type != Type::Integer {
                     self.throw_error(VynError::TypeMismatch {
                         expected: vec![Type::Integer],
@@ -372,21 +404,7 @@ impl TypeChecker {
                 }
 
                 match target_type.clone() {
-                    Type::Array(element_type, size) => {
-                        // Check bounds if index is constant
-                        if let Some(idx) = Type::evaluate_const_expr(property.as_ref()) {
-                            if idx < 0 || idx >= size as i32 {
-                                self.throw_error(VynError::IndexOutOfBounds {
-                                    size,
-                                    idx: idx as i64,
-                                    span: property.span,
-                                });
-                                return Err(());
-                            }
-                        }
-
-                        Ok(*element_type)
-                    }
+                    Type::Array(element_type, _size) => Ok(*element_type),
                     Type::Sequence(element_type) => Ok(*element_type),
 
                     _ => {
@@ -404,10 +422,35 @@ impl TypeChecker {
                 property,
                 new_value,
             } => {
+                if let Expr::Identifier(name) = &target.node {
+                    let ident_symbol = self.symbol_type_table.resolve_identifier(
+                        name,
+                        target.span,
+                        &mut self.errors,
+                    )?;
+
+                    if !ident_symbol.mutable {
+                        self.throw_error(VynError::ImmutableMutation {
+                            identifier: name.clone(),
+                            span: ident_symbol.span,
+                            mutation_span: span,
+                        });
+                        return Err(());
+                    }
+
+                    if ident_symbol.is_static() {
+                        self.throw_error(VynError::StaticMutation {
+                            identifier: name.clone(),
+                            mutator_span: span,
+                            span: ident_symbol.span,
+                        });
+                        return Err(());
+                    }
+                }
+
                 let target_type = self.check_expression(target, None)?;
                 let property_type = self.check_expression(property, None)?;
 
-                // Property must be an integer (index)
                 if property_type != Type::Integer {
                     self.throw_error(VynError::TypeMismatch {
                         expected: vec![Type::Integer],
@@ -418,19 +461,7 @@ impl TypeChecker {
                 }
 
                 match target_type {
-                    Type::Array(element_type, size) => {
-                        // Check bounds if index is constant
-                        if let Some(idx) = Type::evaluate_const_expr(property.as_ref()) {
-                            if idx < 0 || idx >= size as i32 {
-                                self.throw_error(VynError::IndexOutOfBounds {
-                                    size,
-                                    idx: idx as i64,
-                                    span: property.span,
-                                });
-                                return Err(());
-                            }
-                        }
-
+                    Type::Array(element_type, _size) => {
                         let new_value_type =
                             self.check_expression(new_value, Some((*element_type).clone()))?;
 
@@ -497,8 +528,19 @@ impl TypeChecker {
                 )?;
 
                 let is_mutable = ident_symbol.mutable;
+                let is_static = ident_symbol.is_static();
                 let ident_span = ident_symbol.span;
                 let expected_type = ident_symbol.symbol_type.clone();
+
+                if is_static {
+                    self.throw_error(VynError::StaticMutation {
+                        identifier: ident_name,
+                        mutator_span: span,
+                        span: ident_span,
+                    });
+
+                    return Err(());
+                }
 
                 if !is_mutable {
                     self.throw_error(VynError::ImmutableMutation {
@@ -509,27 +551,22 @@ impl TypeChecker {
                     return Err(());
                 }
 
-                let value_type = self.check_expression(new_value, Some(expected_type.clone()))?;
+                let new_value_type =
+                    self.check_expression(new_value, Some(expected_type.clone()))?;
 
-                if expected_type != value_type {
+                if expected_type != new_value_type {
                     self.throw_error(VynError::TypeMismatch {
-                        expected: vec![expected_type],
-                        found: value_type,
+                        expected: vec![expected_type.clone()],
+                        found: new_value_type,
                         span: new_value.span,
                     });
                     return Err(());
                 }
 
-                Ok(value_type)
+                Ok(expected_type)
             }
 
-            _ => {
-                self.throw_error(VynError::TypeInfer {
-                    expr: expr.node.clone(),
-                    span,
-                });
-                Err(())
-            }
+            _ => throw_error(&format!("unknown expr:\n\n{:#?}", expr.node), 1),
         }
     }
 

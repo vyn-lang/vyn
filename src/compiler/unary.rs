@@ -9,7 +9,7 @@ use crate::{
     utils::Span,
 };
 
-impl Compiler {
+impl Compiler<'_> {
     pub(crate) fn compile_unary_expr(
         &mut self,
         operator: Token,

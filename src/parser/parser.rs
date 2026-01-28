@@ -71,6 +71,7 @@ impl Parser {
         parser.register_led(TokenType::BoxColon, Parser::parse_index_expr);
 
         parser.register_stmt(TokenType::Let, Parser::parse_variable_decl);
+        parser.register_stmt(TokenType::Static, Parser::parse_static_variable_decl);
         parser.register_stmt(TokenType::Type, Parser::parse_type_alias_decl);
         parser.register_stmt(TokenType::Stdout, Parser::parse_stdout_log_decl);
         parser.register_stmt(TokenType::If, Parser::parse_if_stmt_decl);
@@ -590,14 +591,12 @@ impl Parser {
         let let_tok = self.current_token().clone();
         self.advance();
 
-        // Check for mutability marker FIRST
         let mut mutable = false;
         if self.current_token_is(TokenType::At) {
             self.advance();
             mutable = true;
         }
 
-        // THEN check for identifier
         if self.current_token().token.get_token_type() != TokenType::Identifier {
             self.errors.add(VynError::ExpectedToken {
                 expected: TokenType::Identifier,
@@ -643,9 +642,64 @@ impl Parser {
         )
     }
 
+    pub fn parse_static_variable_decl(&mut self) -> Option<Statement> {
+        let static_tok_info = self.current_token().clone();
+        self.advance();
+
+        if self.current_token().token.get_token_type() != TokenType::Identifier {
+            self.errors.add(VynError::ExpectedToken {
+                expected: TokenType::Identifier,
+                got: self.current_token().token.get_token_type(),
+                span: self.current_token().span,
+            });
+            return None;
+        }
+
+        let ident = self.parse_identifier_literal()?;
+
+        if !self.expect(TokenType::Colon) {
+            return None;
+        }
+
+        let an_type = self.try_parse_type()?;
+
+        if !self.expect(TokenType::Assign) {
+            return None;
+        }
+
+        let value = self.try_parse_expression(Precedence::Default.into())?;
+
+        if !self.expect_delimiter() {
+            return None;
+        }
+
+        let full_span = Span {
+            line: static_tok_info.span.line,
+            start_column: static_tok_info.span.start_column,
+            end_column: value.span.end_column,
+        };
+
+        let stmt = Stmt::StaticVariableDeclaration {
+            identifier: ident,
+            value,
+            annotated_type: an_type,
+        }
+        .spanned(full_span);
+
+        Some(stmt)
+    }
+
     pub fn parse_type_alias_decl(&mut self) -> Option<Statement> {
-        let type_tok_info = self.current_token().clone();
         self.advance(); // Eat Type Token
+
+        if self.current_token().token.get_token_type() != TokenType::Identifier {
+            self.errors.add(VynError::ExpectedToken {
+                expected: TokenType::Identifier,
+                got: self.current_token().token.get_token_type(),
+                span: self.current_token().span,
+            });
+            return None;
+        }
 
         let ident = self.parse_identifier_literal()?;
 

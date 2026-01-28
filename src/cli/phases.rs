@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 pub enum Phase {
     Tokenizing,
     Parsing,
+    StaticEvaluation,
     TypeChecking,
     Compiling,
 }
@@ -17,6 +18,7 @@ impl Phase {
         match self {
             Phase::Tokenizing => "Tokenizing",
             Phase::Parsing => "Parsing",
+            Phase::StaticEvaluation => "Evaluating Statics",
             Phase::TypeChecking => "Type Checking",
             Phase::Compiling => "Compiling",
         }
@@ -25,17 +27,19 @@ impl Phase {
     fn progress_start(&self) -> u64 {
         match self {
             Phase::Tokenizing => 0,
-            Phase::Parsing => 25,
-            Phase::TypeChecking => 50,
-            Phase::Compiling => 75,
+            Phase::Parsing => 20,
+            Phase::StaticEvaluation => 40,
+            Phase::TypeChecking => 60,
+            Phase::Compiling => 80,
         }
     }
 
     fn progress_end(&self) -> u64 {
         match self {
-            Phase::Tokenizing => 25,
-            Phase::Parsing => 50,
-            Phase::TypeChecking => 75,
+            Phase::Tokenizing => 20,
+            Phase::Parsing => 40,
+            Phase::StaticEvaluation => 60,
+            Phase::TypeChecking => 80,
             Phase::Compiling => 100,
         }
     }

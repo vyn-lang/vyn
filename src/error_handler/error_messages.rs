@@ -27,6 +27,12 @@ impl VynError {
             VynError::TypeInfer { expr, .. } => {
                 format!("Cannot infer type of expression '{expr}'")
             }
+            VynError::StaticMutation { identifier, .. } => {
+                format!("Cannot mutate static identifier '{identifier}'")
+            }
+            VynError::StaticRequiresConstant { .. } => {
+                format!("Cannot use value as a static value")
+            }
             VynError::ArrayLengthMismatch { expected, got, .. } => {
                 format!(
                     "Array length mismatch, expected length '[{expected}]' but got '[{got}]' instead"
@@ -90,6 +96,51 @@ impl VynError {
                         operator, left_type, right_type
                     )
                 }
+            }
+            VynError::CircularStaticDependency { name, .. } => {
+                format!("Circular dependency detected in static variable '{}'", name)
+            }
+            VynError::UndefinedStatic { name, .. } => {
+                format!(
+                    "Undefined static variable '{}' in constant expression",
+                    name
+                )
+            }
+            VynError::StaticEvaluationFailed { name, .. } => {
+                format!(
+                    "Failed to evaluate static variable '{}' at compile time",
+                    name
+                )
+            }
+            VynError::NotStaticExpression { .. } => {
+                "Expression is not a compile-time constant".to_string()
+            }
+            VynError::InvalidStaticOperation { operation, .. } => {
+                format!(
+                    "Operation '{}' is not allowed in static expressions",
+                    operation
+                )
+            }
+            VynError::StaticOverflow { .. } => {
+                "Arithmetic overflow in static expression".to_string()
+            }
+            VynError::NegativeExponent { .. } => {
+                "Cannot use negative exponent in compile-time expression".to_string()
+            }
+            VynError::NegativeArraySize { size, .. } => {
+                format!("Array size cannot be negative, got '{}'", size)
+            }
+            VynError::ArraySizeNotStatic { .. } => {
+                "Array size must be a compile-time constant expression".to_string()
+            }
+            VynError::InvalidUnaryOperator { operator, .. } => {
+                format!("Unary operator '{}' is not valid in this context", operator)
+            }
+            VynError::InvalidBinaryOperator { operator, .. } => {
+                format!(
+                    "Binary operator '{}' is not valid in this context",
+                    operator
+                )
             }
             VynError::UndefinedVariable { name, .. } => {
                 format!("Undefined variable '{}'", name)

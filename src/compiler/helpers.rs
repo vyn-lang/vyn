@@ -4,7 +4,7 @@ use crate::{
     type_checker::type_checker::Type,
 };
 
-impl Compiler {
+impl Compiler<'_> {
     pub(crate) fn get_expr_type(&mut self, expr: &Box<Expression>) -> Option<Type> {
         match &expr.node {
             Expr::IntegerLiteral(_) => Some(Type::Integer),

@@ -1,7 +1,7 @@
 use crate::{
     ast::ast::{Expr, Node},
     runtime_value::values::RuntimeType,
-    tokens::TokenType,
+    tokens::{Token, TokenType},
     type_checker::type_checker::Type,
     utils::Span,
 };
@@ -28,6 +28,58 @@ pub enum VynError {
     },
     ExpectedType {
         got: TokenType,
+        span: Span,
+    },
+
+    // ----- Static Evaluator -----
+    CircularStaticDependency {
+        name: String,
+        span: Span,
+    },
+
+    UndefinedStatic {
+        name: String,
+        span: Span,
+    },
+
+    StaticEvaluationFailed {
+        name: String,
+        span: Span,
+    },
+
+    NotStaticExpression {
+        span: Span,
+    },
+
+    InvalidStaticOperation {
+        operation: String,
+        span: Span,
+    },
+
+    StaticOverflow {
+        span: Span,
+    },
+
+    NegativeExponent {
+        span: Span,
+    },
+
+    NegativeArraySize {
+        size: i32,
+        span: Span,
+    },
+
+    ArraySizeNotStatic {
+        span: Span,
+    },
+
+    InvalidUnaryOperator {
+        operator: Token,
+        span: Span,
+    },
+
+    InvalidBinaryOperator {
+        operator: Token,
         span: Span,
     },
 
@@ -58,6 +110,14 @@ pub enum VynError {
     IndexOutOfBounds {
         size: usize,
         idx: i64,
+        span: Span,
+    },
+    StaticRequiresConstant {
+        span: Span,
+    },
+    StaticMutation {
+        identifier: String,
+        mutator_span: Span,
         span: Span,
     },
     InvalidUnaryOp {

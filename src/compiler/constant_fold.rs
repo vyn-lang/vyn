@@ -5,7 +5,7 @@ use crate::{
     tokens::{Token, TokenType},
 };
 
-impl Compiler {
+impl Compiler<'_> {
     pub(crate) fn try_fold_expr(&mut self, expr: &Expression) -> Option<RuntimeValue> {
         match &expr.node {
             Expr::IntegerLiteral(v) => Some(RuntimeValue::IntegerLiteral(*v)),

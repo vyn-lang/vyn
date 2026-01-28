@@ -6,11 +6,11 @@ use crate::{
     compiler::{debug_info::DebugInfo, symbol_table::SymbolTable},
     error_handler::{error_collector::ErrorCollector, errors::VynError},
     runtime_value::values::RuntimeValue,
-    type_checker::type_checker::Type,
+    type_checker::{static_evaluator::StaticEvaluator, type_checker::Type},
     utils::Span,
 };
 
-pub struct Compiler {
+pub struct Compiler<'a> {
     pub instructions: Instructions,
     pub constants: Vec<RuntimeValue>,
     pub string_table: Vec<String>,
@@ -21,6 +21,8 @@ pub struct Compiler {
     free_registers: Vec<u8>,
     pinned_registers: HashSet<u8>,
     errors: ErrorCollector,
+
+    static_eval: &'a StaticEvaluator,
 }
 
 #[derive(Debug)]
@@ -31,8 +33,8 @@ pub struct Bytecode {
     pub debug_info: DebugInfo,
 }
 
-impl Compiler {
-    pub fn new() -> Self {
+impl<'a> Compiler<'a> {
+    pub fn new(static_eval: &'a StaticEvaluator) -> Self {
         Self {
             instructions: Vec::new(),
             constants: Vec::new(),
@@ -44,6 +46,8 @@ impl Compiler {
 
             symbol_table: SymbolTable::new(),
             errors: ErrorCollector::new(),
+
+            static_eval,
         }
     }
 
@@ -86,9 +90,42 @@ impl Compiler {
                     _ => unreachable!("Variable name must be identifier"),
                 };
 
-                let expected_type = Type::from_anotated_type(&annotated_type);
+                let expected_type =
+                    Type::from_anotated_type(&annotated_type, self.static_eval, &mut self.errors);
 
                 // Pass the expected type down to compile_expression
+                let value_reg = self.compile_expression(value, Some(&expected_type))?;
+                self.pin_register(value_reg);
+
+                match self.symbol_table.declare_identifier(
+                    var_name.clone(),
+                    span,
+                    expected_type,
+                    value_reg,
+                ) {
+                    Ok(_) => {}
+                    Err(he) => {
+                        self.throw_error(he);
+                        return None;
+                    }
+                };
+
+                Some(())
+            }
+
+            Stmt::StaticVariableDeclaration {
+                identifier,
+                value,
+                annotated_type,
+            } => {
+                let var_name = match identifier.node {
+                    Expr::Identifier(n) => n,
+                    _ => unreachable!("Variable name must be identifier"),
+                };
+
+                let expected_type =
+                    Type::from_anotated_type(&annotated_type, self.static_eval, &mut self.errors);
+
                 let value_reg = self.compile_expression(value, Some(&expected_type))?;
                 self.pin_register(value_reg);
 

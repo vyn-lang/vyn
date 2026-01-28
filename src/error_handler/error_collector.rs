@@ -13,6 +13,7 @@ impl VynError {
             VynError::NotImplemented { span, .. } => *span,
             VynError::InvalidIndexing { span, .. } => *span,
             VynError::IndexOutOfBounds { span, .. } => *span,
+            VynError::StaticRequiresConstant { span, .. } => *span,
 
             VynError::TypeMismatch { span, .. } => *span,
             VynError::InvalidUnaryOp { span, .. } => *span,
@@ -23,7 +24,19 @@ impl VynError {
                 redeclaration_span, ..
             } => *redeclaration_span,
             VynError::TypeAliasRedeclaration { span, .. } => *span,
+            VynError::CircularStaticDependency { span, .. } => *span,
+            VynError::UndefinedStatic { span, .. } => *span,
+            VynError::StaticEvaluationFailed { span, .. } => *span,
+            VynError::NotStaticExpression { span, .. } => *span,
+            VynError::InvalidStaticOperation { span, .. } => *span,
+            VynError::StaticOverflow { span, .. } => *span,
+            VynError::NegativeExponent { span, .. } => *span,
+            VynError::NegativeArraySize { span, .. } => *span,
+            VynError::ArraySizeNotStatic { span, .. } => *span,
+            VynError::InvalidUnaryOperator { span, .. } => *span,
+            VynError::InvalidBinaryOperator { span, .. } => *span,
             VynError::ImmutableMutation { span, .. } => *span,
+            VynError::StaticMutation { span, .. } => *span,
             VynError::LeftHandAssignment { span, .. } => *span,
             VynError::TypeInfer { span, .. } => *span,
             VynError::ArrayLengthMismatch { span, .. } => *span,
@@ -146,6 +159,11 @@ impl VynError {
                 eprintln!();
                 eprintln!("{}", "identifier mutated here".white().dimmed());
                 self.print_code_snippet(source, *mutation_span, false);
+            }
+            VynError::StaticMutation { mutator_span, .. } => {
+                eprintln!();
+                eprintln!("{}", "identifier mutated here".white().dimmed());
+                self.print_code_snippet(source, *mutator_span, false);
             }
             _ => {}
         }

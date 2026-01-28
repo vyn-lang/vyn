@@ -126,6 +126,11 @@ pub enum Stmt {
         annotated_type: TypeAnnotation,
         mutable: bool,
     },
+    StaticVariableDeclaration {
+        identifier: Expression,
+        value: Expression,
+        annotated_type: TypeAnnotation,
+    },
     TypeAliasDeclaration {
         identifier: Expression,
         value: TypeAnnotation,
