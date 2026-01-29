@@ -187,6 +187,8 @@ impl<'a> TypeChecker<'a> {
                 Ok(())
             }
 
+            Stmt::Loop { body } => self.check_statement(body.as_ref()),
+
             Stmt::StaticVariableDeclaration {
                 identifier,
                 value,
@@ -243,7 +245,7 @@ impl<'a> TypeChecker<'a> {
                 Ok(())
             }
 
-            Stmt::Block { statements } => {
+            Stmt::Scope { statements } => {
                 let parent_table =
                     mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new());
 

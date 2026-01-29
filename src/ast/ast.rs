@@ -138,6 +138,11 @@ pub enum Stmt {
     StdoutLog {
         log_value: Expression,
     },
+    Scope {
+        // This only creates a seperate symbol table at comp time
+        // whilst block creates a its own instruction area
+        statements: Vec<Statement>,
+    },
     Block {
         statements: Vec<Statement>,
     },
@@ -145,6 +150,9 @@ pub enum Stmt {
         condition: Expression,
         consequence: Box<Statement>,
         alternate: Box<Option<Statement>>,
+    },
+    Loop {
+        body: Box<Statement>,
     },
 }
 

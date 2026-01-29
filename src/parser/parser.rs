@@ -75,6 +75,7 @@ impl Parser {
         parser.register_stmt(TokenType::Type, Parser::parse_type_alias_decl);
         parser.register_stmt(TokenType::Stdout, Parser::parse_stdout_log_decl);
         parser.register_stmt(TokenType::If, Parser::parse_if_stmt_decl);
+        parser.register_stmt(TokenType::Loop, Parser::parse_loop_stmt_decl);
 
         parser
     }
@@ -772,17 +773,39 @@ impl Parser {
         Some(stmt)
     }
 
+    fn parse_scope_stmt(&mut self) -> Option<Statement> {
+        let lb_tok_info = self.current_token().clone();
+
+        if !self.expect(TokenType::LeftBrace) {
+            return None;
+        }
+        self.ignore(TokenType::Newline);
+
+        let mut statements: Vec<Statement> = Vec::new();
+
+        while self.current_token_type() != TokenType::RightBrace {
+            statements.push(self.try_parse_statement()?);
+        }
+
+        if !self.expect(TokenType::RightBrace) {
+            return None;
+        }
+
+        let stmt = Stmt::Scope { statements }.spanned(lb_tok_info.span);
+        Some(stmt)
+    }
+
     pub fn parse_if_stmt_decl(&mut self) -> Option<Statement> {
         let if_tok_info = self.current_token().clone();
         self.advance();
 
         let condition = self.try_parse_expression(Precedence::Default.into())?;
-        let consequence = self.parse_block_stmt()?;
+        let consequence = self.parse_scope_stmt()?;
         let mut alternate: Option<Statement> = None;
 
         if self.current_token_type() == TokenType::Else {
             self.advance(); // Eat else token
-            alternate = self.parse_block_stmt();
+            alternate = self.parse_scope_stmt();
         }
 
         let stmt = Stmt::IfDeclaration {
@@ -792,5 +815,19 @@ impl Parser {
         };
 
         Some(stmt.spanned(if_tok_info.span))
+    }
+
+    pub fn parse_loop_stmt_decl(&mut self) -> Option<Statement> {
+        let loop_tok_info = self.current_token().clone();
+        self.advance();
+
+        let scope_block = self.parse_scope_stmt()?;
+
+        let stmt = Stmt::Loop {
+            body: Box::new(scope_block),
+        }
+        .spanned(loop_tok_info.span);
+
+        Some(stmt)
     }
 }

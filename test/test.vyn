@@ -1,7 +1,6 @@
-static ARRAY_SIZE: Int = 4;
+let @x: Int = 2
 
-let @arr: [ARRAY_SIZE]Int = [1,2,3]
-
-arr::1=10;
-
-stdout # arr
+loop {
+  x=x^2
+  stdout# x
+}

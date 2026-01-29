@@ -69,6 +69,7 @@ pub enum Token {
     Return,
     Stdout,
     Static,
+    Loop,
 }
 
 impl fmt::Display for Token {
@@ -148,6 +149,7 @@ pub enum TokenType {
     Return,
     Stdout,
     Static,
+    Loop,
 }
 
 impl fmt::Display for TokenType {
@@ -213,6 +215,7 @@ impl fmt::Display for TokenType {
             TokenType::Return => write!(f, "return"),
             TokenType::Stdout => write!(f, "stdout"),
             TokenType::Static => write!(f, "static"),
+            TokenType::Loop => write!(f, "loop"),
         }
     }
 }
@@ -234,6 +237,7 @@ impl Token {
             "return" => Token::Return,
             "stdout" => Token::Stdout,
             "static" => Token::Static,
+            "loop" => Token::Loop,
             _ => Token::Identifier(identifier.to_string()),
         }
     }
@@ -300,6 +304,7 @@ impl Token {
             Token::Return => TokenType::Return,
             Token::Stdout => TokenType::Stdout,
             Token::Static => TokenType::Static,
+            Token::Loop => TokenType::Loop,
         }
     }
 }

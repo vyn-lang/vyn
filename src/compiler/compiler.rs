@@ -155,11 +155,27 @@ impl<'a> Compiler<'a> {
                 Some(())
             }
 
-            Stmt::Block { statements } => {
+            Stmt::Scope { statements } => {
+                self.enter_scope();
+
+                let pinned_before = self.pinned_registers.clone();
+
                 for stmt in statements {
                     self.try_compile_statement(stmt)?;
                 }
 
+                let mut newly_pinned = Vec::new();
+                for reg in &self.pinned_registers {
+                    if !pinned_before.contains(reg) {
+                        newly_pinned.push(*reg);
+                    }
+                }
+
+                for reg in newly_pinned {
+                    self.unpin_register(reg);
+                }
+
+                self.exit_scope();
                 Some(())
             }
 
@@ -199,6 +215,13 @@ impl<'a> Compiler<'a> {
                     let end_jmp_block = self.instructions.len();
                     OpCode::change_operand(&mut self.instructions, jump_pos, vec![end_jmp_block]);
                 }
+                Some(())
+            }
+
+            Stmt::Loop { body } => {
+                let loop_start = self.instructions.len();
+                self.try_compile_statement(*body)?;
+                self.emit(OpCode::JumpUncond, vec![loop_start], span);
                 Some(())
             }
 
@@ -535,6 +558,14 @@ impl<'a> Compiler<'a> {
         let instruction = OpCode::make(opcode, operands);
         let position = self.add_instruction(instruction, span);
         position
+    }
+
+    pub(crate) fn enter_scope(&mut self) {
+        self.symbol_table = self.symbol_table.enter_scope();
+    }
+
+    pub(crate) fn exit_scope(&mut self) {
+        self.symbol_table = mem::take(&mut self.symbol_table).exit_scope();
     }
 
     pub(crate) fn add_instruction(&mut self, instruction: Instructions, span: Span) -> usize {
