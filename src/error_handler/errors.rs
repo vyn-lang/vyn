@@ -30,6 +30,10 @@ pub enum VynError {
         got: TokenType,
         span: Span,
     },
+    IllegalLoopInterruptToken {
+        token_type: TokenType,
+        span: Span,
+    },
 
     // ----- Static Evaluator -----
     CircularStaticDependency {

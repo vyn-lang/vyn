@@ -23,6 +23,13 @@ pub struct Compiler<'a> {
     errors: ErrorCollector,
 
     static_eval: &'a StaticEvaluator,
+    loop_stack: Vec<LoopContext>,
+}
+
+#[derive(Debug, Clone)]
+struct LoopContext {
+    start_offset: usize,       // Where the loop begins (for continue)
+    break_patches: Vec<usize>, // Positions of break jumps to patch later
 }
 
 #[derive(Debug)]
@@ -48,6 +55,7 @@ impl<'a> Compiler<'a> {
             errors: ErrorCollector::new(),
 
             static_eval,
+            loop_stack: Vec::new(),
         }
     }
 
@@ -220,8 +228,45 @@ impl<'a> Compiler<'a> {
 
             Stmt::Loop { body } => {
                 let loop_start = self.instructions.len();
+
+                self.loop_stack.push(LoopContext {
+                    start_offset: loop_start,
+                    break_patches: Vec::new(),
+                });
+
                 self.try_compile_statement(*body)?;
+
                 self.emit(OpCode::JumpUncond, vec![loop_start], span);
+
+                let loop_ctx = self.loop_stack.pop().unwrap();
+                let loop_end = self.instructions.len();
+
+                for patch_pos in loop_ctx.break_patches {
+                    OpCode::change_operand(&mut self.instructions, patch_pos, vec![loop_end]);
+                }
+
+                Some(())
+            }
+
+            Stmt::Continue => {
+                // Jump directly back to loop start
+                let loop_start = self.loop_stack.last().unwrap().start_offset;
+                self.emit(OpCode::JumpUncond, vec![loop_start], span);
+
+                Some(())
+            }
+
+            Stmt::Break => {
+                // Emit jump with placeholder target
+                let jump_pos = self.emit(OpCode::JumpUncond, vec![9999], span);
+
+                // Record this position for later patching
+                self.loop_stack
+                    .last_mut()
+                    .unwrap()
+                    .break_patches
+                    .push(jump_pos);
+
                 Some(())
             }
 

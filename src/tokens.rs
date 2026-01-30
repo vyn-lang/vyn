@@ -70,6 +70,8 @@ pub enum Token {
     Stdout,
     Static,
     Loop,
+    Break,
+    Continue,
 }
 
 impl fmt::Display for Token {
@@ -150,6 +152,8 @@ pub enum TokenType {
     Stdout,
     Static,
     Loop,
+    Break,
+    Continue,
 }
 
 impl fmt::Display for TokenType {
@@ -216,6 +220,8 @@ impl fmt::Display for TokenType {
             TokenType::Stdout => write!(f, "stdout"),
             TokenType::Static => write!(f, "static"),
             TokenType::Loop => write!(f, "loop"),
+            TokenType::Break => write!(f, "break"),
+            TokenType::Continue => write!(f, "continue"),
         }
     }
 }
@@ -238,6 +244,8 @@ impl Token {
             "stdout" => Token::Stdout,
             "static" => Token::Static,
             "loop" => Token::Loop,
+            "continue" => Token::Continue,
+            "break" => Token::Break,
             _ => Token::Identifier(identifier.to_string()),
         }
     }
@@ -305,6 +313,8 @@ impl Token {
             Token::Stdout => TokenType::Stdout,
             Token::Static => TokenType::Static,
             Token::Loop => TokenType::Loop,
+            Token::Break => TokenType::Break,
+            Token::Continue => TokenType::Continue,
         }
     }
 }

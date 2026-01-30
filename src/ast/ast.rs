@@ -154,6 +154,8 @@ pub enum Stmt {
     Loop {
         body: Box<Statement>,
     },
+    Continue,
+    Break,
 }
 
 impl Expr {

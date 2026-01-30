@@ -4,6 +4,7 @@ use crate::{
         type_annotation::TypeAnnotation,
     },
     error_handler::{error_collector::ErrorCollector, errors::VynError},
+    tokens::TokenType,
     type_checker::{static_evaluator::StaticEvaluator, symbol_type_table::SymbolTypeTable},
     utils::throw_error,
 };
@@ -119,6 +120,7 @@ pub struct TypeChecker<'a> {
     pub(crate) symbol_type_table: SymbolTypeTable,
     pub(crate) errors: ErrorCollector,
     static_eval: &'a StaticEvaluator,
+    loop_depth: usize,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -127,6 +129,7 @@ impl<'a> TypeChecker<'a> {
             symbol_type_table: SymbolTypeTable::new(),
             errors: ErrorCollector::new(),
             static_eval,
+            loop_depth: 0,
         }
     }
 
@@ -187,7 +190,39 @@ impl<'a> TypeChecker<'a> {
                 Ok(())
             }
 
-            Stmt::Loop { body } => self.check_statement(body.as_ref()),
+            Stmt::Loop { body } => {
+                self.loop_depth += 1;
+                let stmt = self.check_statement(body.as_ref());
+                self.loop_depth -= 1;
+
+                stmt
+            }
+
+            Stmt::Break => {
+                if self.loop_depth <= 0 {
+                    self.throw_error(VynError::IllegalLoopInterruptToken {
+                        token_type: TokenType::Break,
+                        span,
+                    });
+
+                    return Err(());
+                }
+
+                Ok(())
+            }
+
+            Stmt::Continue => {
+                if self.loop_depth <= 0 {
+                    self.throw_error(VynError::IllegalLoopInterruptToken {
+                        token_type: TokenType::Continue,
+                        span,
+                    });
+
+                    return Err(());
+                }
+
+                Ok(())
+            }
 
             Stmt::StaticVariableDeclaration {
                 identifier,

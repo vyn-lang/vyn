@@ -1,6 +1,11 @@
-let @x: Int = 2
+let @i: Int = 0
 
 loop {
-  x=x^2
-  stdout# x
+  if i == 1000 {
+    break
+  }
+  
+  i = i + 1
 }
+
+stdout# i

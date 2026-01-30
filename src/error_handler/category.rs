@@ -3,15 +3,16 @@ use crate::error_handler::errors::VynError;
 impl VynError {
     pub fn category(&self) -> &str {
         match self {
+            // Syntax errors
             VynError::UnexpectedToken { .. } => "Syntax",
             VynError::ExpectedToken { .. } => "Syntax",
             VynError::KeywordTypeError { .. } => "Syntax",
             VynError::InvalidTypeName { .. } => "Syntax",
             VynError::ExpectedType { .. } => "Syntax",
             VynError::StaticRequiresConstant { .. } => "Syntax",
-            VynError::RegisterOverflow { .. } => "Compiler",
-            VynError::NotImplemented { .. } => "Compiler",
+            VynError::IllegalLoopInterruptToken { .. } => "Syntax",
 
+            // Type errors
             VynError::TypeMismatch { .. } => "Type",
             VynError::InvalidUnaryOp { .. } => "Type",
             VynError::InvalidBinaryOp { .. } => "Type",
@@ -25,28 +26,34 @@ impl VynError {
             VynError::InvalidIndexing { .. } => "Type",
             VynError::TypeInfer { .. } => "Type",
             VynError::ArrayLengthMismatch { .. } => "Type",
-            VynError::CircularStaticDependency { .. } => "Type",
-            VynError::UndefinedStatic { .. } => "Type",
-            VynError::StaticEvaluationFailed { .. } => "Type",
-            VynError::NotStaticExpression { .. } => "Type",
-            VynError::InvalidStaticOperation { .. } => "Type",
-            VynError::StaticOverflow { .. } => "Type",
-            VynError::NegativeExponent { .. } => "Type",
-            VynError::NegativeArraySize { .. } => "Type",
-            VynError::ArraySizeNotStatic { .. } => "Type",
             VynError::InvalidUnaryOperator { .. } => "Type",
             VynError::InvalidBinaryOperator { .. } => "Type",
 
+            // Static evaluation errors
+            VynError::CircularStaticDependency { .. } => "StaticEval",
+            VynError::UndefinedStatic { .. } => "StaticEval",
+            VynError::StaticEvaluationFailed { .. } => "StaticEval",
+            VynError::NotStaticExpression { .. } => "StaticEval",
+            VynError::InvalidStaticOperation { .. } => "StaticEval",
+            VynError::StaticOverflow { .. } => "StaticEval",
+            VynError::NegativeExponent { .. } => "StaticEval",
+            VynError::NegativeArraySize { .. } => "StaticEval",
+            VynError::ArraySizeNotStatic { .. } => "StaticEval",
+
+            // Index errors
             VynError::IndexOutOfBounds { .. } => "Index",
 
+            // Compiler errors
+            VynError::RegisterOverflow { .. } => "Compiler",
+            VynError::NotImplemented { .. } => "Compiler",
             VynError::UnknownAST { .. } => "Compiler",
             VynError::UndefinedIdentifier { .. } => "Compiler",
 
+            // Runtime errors
             VynError::ArithmeticError { .. } => "Runtime",
             VynError::UnaryOperationError { .. } => "Runtime",
             VynError::ComparisonOperationError { .. } => "Runtime",
-
-            VynError::DivisionByZero { .. } => "Math",
+            VynError::DivisionByZero { .. } => "Runtime",
         }
     }
 }

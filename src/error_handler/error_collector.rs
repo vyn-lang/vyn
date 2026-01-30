@@ -35,6 +35,7 @@ impl VynError {
             VynError::ArraySizeNotStatic { span, .. } => *span,
             VynError::InvalidUnaryOperator { span, .. } => *span,
             VynError::InvalidBinaryOperator { span, .. } => *span,
+            VynError::IllegalLoopInterruptToken { span, .. } => *span,
             VynError::ImmutableMutation { span, .. } => *span,
             VynError::StaticMutation { span, .. } => *span,
             VynError::LeftHandAssignment { span, .. } => *span,

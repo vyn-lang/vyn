@@ -167,6 +167,10 @@ impl VynError {
                 }
             }
 
+            VynError::IllegalLoopInterruptToken { token_type, .. } => {
+                Some(format!("Remove the '{token_type}' statement"))
+            }
+
             VynError::UnaryOperationError { operation, .. } => match operation {
                 TokenType::Minus => {
                     Some("Negation requires an integer or float operand".to_string())

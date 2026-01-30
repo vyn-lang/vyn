@@ -5,6 +5,7 @@ use crate::{
     error_handler::{error_collector::ErrorCollector, errors::VynError},
     parser::{lookups::Precedence, type_parser::TypeTable},
     tokens::{Token, TokenInfo, TokenType},
+    type_checker::type_checker::TypeChecker,
     utils::{Span, Spanned},
 };
 
@@ -76,6 +77,8 @@ impl Parser {
         parser.register_stmt(TokenType::Stdout, Parser::parse_stdout_log_decl);
         parser.register_stmt(TokenType::If, Parser::parse_if_stmt_decl);
         parser.register_stmt(TokenType::Loop, Parser::parse_loop_stmt_decl);
+        parser.register_stmt(TokenType::Break, Parser::parse_loop_interrupt_stmt);
+        parser.register_stmt(TokenType::Continue, Parser::parse_loop_interrupt_stmt);
 
         parser
     }
@@ -757,11 +760,18 @@ impl Parser {
         if !self.expect(TokenType::LeftBrace) {
             return None;
         }
-        self.ignore(TokenType::Newline);
+
+        self.skip_delimiters();
 
         let mut statements: Vec<Statement> = Vec::new();
 
         while self.current_token_type() != TokenType::RightBrace {
+            self.skip_delimiters();
+
+            if self.current_token_type() == TokenType::RightBrace {
+                break;
+            }
+
             statements.push(self.try_parse_statement()?);
         }
 
@@ -769,8 +779,7 @@ impl Parser {
             return None;
         }
 
-        let stmt = Stmt::Block { statements }.spanned(lb_tok_info.span);
-        Some(stmt)
+        Some(Stmt::Block { statements }.spanned(lb_tok_info.span))
     }
 
     fn parse_scope_stmt(&mut self) -> Option<Statement> {
@@ -779,11 +788,18 @@ impl Parser {
         if !self.expect(TokenType::LeftBrace) {
             return None;
         }
-        self.ignore(TokenType::Newline);
+
+        self.skip_delimiters();
 
         let mut statements: Vec<Statement> = Vec::new();
 
         while self.current_token_type() != TokenType::RightBrace {
+            self.skip_delimiters();
+
+            if self.current_token_type() == TokenType::RightBrace {
+                break;
+            }
+
             statements.push(self.try_parse_statement()?);
         }
 
@@ -791,8 +807,7 @@ impl Parser {
             return None;
         }
 
-        let stmt = Stmt::Scope { statements }.spanned(lb_tok_info.span);
-        Some(stmt)
+        Some(Stmt::Scope { statements }.spanned(lb_tok_info.span))
     }
 
     pub fn parse_if_stmt_decl(&mut self) -> Option<Statement> {
@@ -829,5 +844,23 @@ impl Parser {
         .spanned(loop_tok_info.span);
 
         Some(stmt)
+    }
+
+    pub fn parse_loop_interrupt_stmt(&mut self) -> Option<Statement> {
+        let span = self.current_token().span;
+
+        let stmt = match self.current_token_type() {
+            TokenType::Continue => Stmt::Continue,
+            TokenType::Break => Stmt::Break,
+            unknown => unreachable!("{}", unknown),
+        };
+
+        self.advance();
+
+        if !self.expect_delimiter() {
+            return None;
+        }
+
+        Some(stmt.spanned(span))
     }
 }

@@ -146,6 +146,10 @@ impl VynError {
                 format!("Undefined variable '{}'", name)
             }
 
+            VynError::IllegalLoopInterruptToken { token_type, .. } => {
+                format!("Illegal '{token_type}' token found outside of loops")
+            }
+
             VynError::IndexOutOfBounds { size, idx, .. } => {
                 format!(
                     "Cannot index a value in index '{}' with a length of '{}'",
