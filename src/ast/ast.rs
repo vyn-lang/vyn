@@ -154,6 +154,10 @@ pub enum Stmt {
     Loop {
         body: Box<Statement>,
     },
+    WhenLoop {
+        body: Box<Statement>,
+        condition: Expression,
+    },
     Continue,
     Break,
 }

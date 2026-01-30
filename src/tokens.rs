@@ -72,6 +72,8 @@ pub enum Token {
     Loop,
     Break,
     Continue,
+    For,
+    When,
 }
 
 impl fmt::Display for Token {
@@ -154,6 +156,8 @@ pub enum TokenType {
     Loop,
     Break,
     Continue,
+    For,
+    When,
 }
 
 impl fmt::Display for TokenType {
@@ -222,6 +226,8 @@ impl fmt::Display for TokenType {
             TokenType::Loop => write!(f, "loop"),
             TokenType::Break => write!(f, "break"),
             TokenType::Continue => write!(f, "continue"),
+            TokenType::For => write!(f, "for"),
+            TokenType::When => write!(f, "when"),
         }
     }
 }
@@ -246,6 +252,8 @@ impl Token {
             "loop" => Token::Loop,
             "continue" => Token::Continue,
             "break" => Token::Break,
+            "for" => Token::For,
+            "when" => Token::When,
             _ => Token::Identifier(identifier.to_string()),
         }
     }
@@ -315,6 +323,8 @@ impl Token {
             Token::Loop => TokenType::Loop,
             Token::Break => TokenType::Break,
             Token::Continue => TokenType::Continue,
+            Token::For => TokenType::For,
+            Token::When => TokenType::When,
         }
     }
 }

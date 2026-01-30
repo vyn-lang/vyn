@@ -226,6 +226,27 @@ impl<'a> Compiler<'a> {
                 Some(())
             }
 
+            Stmt::WhenLoop { body, condition } => {
+                let start_loop = self.instructions.len();
+
+                let comp_condition = self.compile_expression(condition, Some(&Type::Bool))?;
+                let jump_false = self.emit(OpCode::JumpIfFalse, vec![9999, 9999], span);
+
+                self.try_compile_statement(*body)?;
+
+                self.emit(OpCode::JumpUncond, vec![start_loop], span);
+                let end_loop = self.instructions.len();
+                OpCode::change_operand(
+                    &mut self.instructions,
+                    jump_false,
+                    vec![comp_condition as usize, end_loop],
+                );
+
+                self.free_register(comp_condition);
+
+                Some(())
+            }
+
             Stmt::Loop { body } => {
                 let loop_start = self.instructions.len();
 

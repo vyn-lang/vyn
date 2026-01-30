@@ -1,11 +1,6 @@
-let @i: Int = 0
+let @i: Int = 0;
 
-loop {
-  if i == 1000 {
-    break
-  }
-  
-  i = i + 1
+for when i < 10 {
+  stdout# "test"
+  i = i + 2
 }
-
-stdout# i

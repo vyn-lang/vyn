@@ -79,6 +79,7 @@ impl Parser {
         parser.register_stmt(TokenType::Loop, Parser::parse_loop_stmt_decl);
         parser.register_stmt(TokenType::Break, Parser::parse_loop_interrupt_stmt);
         parser.register_stmt(TokenType::Continue, Parser::parse_loop_interrupt_stmt);
+        parser.register_stmt(TokenType::For, Parser::parse_for_loop_stmt);
 
         parser
     }
@@ -862,5 +863,37 @@ impl Parser {
         }
 
         Some(stmt.spanned(span))
+    }
+
+    pub fn parse_for_loop_stmt(&mut self) -> Option<Statement> {
+        let for_tok_info = self.current_token().clone();
+        self.advance();
+
+        match self.current_token_type() {
+            TokenType::When => {
+                self.advance();
+
+                let condition = self.try_parse_expression(Precedence::Default.into())?;
+                let body = self.parse_scope_stmt()?;
+
+                let stmt = Stmt::WhenLoop {
+                    body: Box::new(body),
+                    condition,
+                }
+                .spanned(for_tok_info.span);
+
+                return Some(stmt);
+            }
+
+            _ => {
+                self.advance();
+
+                self.errors.add(VynError::UnexpectedToken {
+                    token: self.current_token_type(),
+                    span: self.current_token().span,
+                });
+                return None;
+            }
+        }
     }
 }

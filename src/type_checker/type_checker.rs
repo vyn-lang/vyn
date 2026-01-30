@@ -190,6 +190,25 @@ impl<'a> TypeChecker<'a> {
                 Ok(())
             }
 
+            Stmt::WhenLoop { condition, body } => {
+                let condition_type = self.check_expression(condition, Some(Type::Bool))?;
+
+                if condition_type != Type::Bool {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![Type::Bool],
+                        found: condition_type,
+                        span: condition.span,
+                    });
+                    return Err(());
+                }
+
+                self.loop_depth += 1;
+                let stmt = self.check_statement(body.as_ref());
+                self.loop_depth -= 1;
+
+                stmt
+            }
+
             Stmt::Loop { body } => {
                 self.loop_depth += 1;
                 let stmt = self.check_statement(body.as_ref());
