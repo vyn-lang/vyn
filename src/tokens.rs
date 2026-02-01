@@ -74,6 +74,8 @@ pub enum Token {
     Continue,
     For,
     When,
+    Every,
+    In,
 }
 
 impl fmt::Display for Token {
@@ -158,6 +160,17 @@ pub enum TokenType {
     Continue,
     For,
     When,
+    Every,
+    In,
+}
+
+impl TokenType {
+    pub fn is_delimiter(&self) -> bool {
+        match self {
+            Self::Semicolon | Self::Newline | Self::EndOfFile => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for TokenType {
@@ -228,6 +241,8 @@ impl fmt::Display for TokenType {
             TokenType::Continue => write!(f, "continue"),
             TokenType::For => write!(f, "for"),
             TokenType::When => write!(f, "when"),
+            TokenType::Every => write!(f, "every"),
+            TokenType::In => write!(f, "in"),
         }
     }
 }
@@ -254,6 +269,8 @@ impl Token {
             "break" => Token::Break,
             "for" => Token::For,
             "when" => Token::When,
+            "every" => Token::Every,
+            "in" => Token::In,
             _ => Token::Identifier(identifier.to_string()),
         }
     }
@@ -325,6 +342,8 @@ impl Token {
             Token::Continue => TokenType::Continue,
             Token::For => TokenType::For,
             Token::When => TokenType::When,
+            Token::Every => TokenType::Every,
+            Token::In => TokenType::In,
         }
     }
 }

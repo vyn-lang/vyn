@@ -1,7 +1,11 @@
 use core::fmt;
 use std::fmt::{Display, Formatter};
 
-use crate::ast::ast::Expression;
+use crate::{
+    ast::ast::{Expr, Expression},
+    type_checker::type_checker::Type,
+    utils::Span,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeAnnotation {

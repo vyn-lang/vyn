@@ -122,7 +122,7 @@ pub enum Stmt {
     },
     VariableDeclaration {
         identifier: Expression,
-        value: Expression,
+        value: Option<Expression>,
         annotated_type: TypeAnnotation,
         mutable: bool,
     },
@@ -157,6 +157,11 @@ pub enum Stmt {
     WhenLoop {
         body: Box<Statement>,
         condition: Expression,
+    },
+    IndexLoop {
+        body: Box<Statement>,
+        iterator: Expression,
+        range: Expression,
     },
     Continue,
     Break,

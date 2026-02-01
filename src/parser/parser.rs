@@ -619,7 +619,31 @@ impl Parser {
 
         let an_type = self.try_parse_type()?;
 
-        if !self.expect(TokenType::Assign) {
+        let mut full_span = Span {
+            line: let_tok.span.line,
+            start_column: let_tok.span.start_column,
+            end_column: self.current_token().span.end_column,
+        };
+
+        if self.current_token_type() != TokenType::Assign {
+            if self.current_token_type().is_delimiter() {
+                return Some(
+                    Stmt::VariableDeclaration {
+                        identifier: ident,
+                        value: None,
+                        annotated_type: an_type,
+                        mutable,
+                    }
+                    .spanned(full_span),
+                );
+            }
+
+            self.errors.add(VynError::ExpectedToken {
+                expected: TokenType::Assign,
+                got: self.current_token_type(),
+                span: full_span,
+            });
+
             return None;
         }
 
@@ -630,16 +654,12 @@ impl Parser {
         }
 
         let val_span = value.span.clone();
-        let full_span = Span {
-            line: let_tok.span.line,
-            start_column: let_tok.span.start_column,
-            end_column: val_span.end_column,
-        };
+        full_span.end_column = val_span.end_column;
 
         Some(
             Stmt::VariableDeclaration {
                 identifier: ident,
-                value,
+                value: Some(value),
                 annotated_type: an_type,
                 mutable,
             }
@@ -879,6 +899,28 @@ impl Parser {
                 let stmt = Stmt::WhenLoop {
                     body: Box::new(body),
                     condition,
+                }
+                .spanned(for_tok_info.span);
+
+                return Some(stmt);
+            }
+
+            TokenType::Every => {
+                self.advance();
+
+                let iterator = self.parse_identifier_literal()?;
+
+                if !self.expect(TokenType::In) {
+                    return None;
+                }
+
+                let range = self.try_parse_expression(Precedence::Default.into())?;
+                let body = self.parse_scope_stmt()?;
+
+                let stmt = Stmt::IndexLoop {
+                    body: Box::new(body),
+                    iterator,
+                    range,
                 }
                 .spanned(for_tok_info.span);
 

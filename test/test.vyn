@@ -1,6 +1,0 @@
-let @i: Int = 0;
-
-for when i < 10 {
-  stdout# "test"
-  i = i + 2
-}

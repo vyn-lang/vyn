@@ -128,9 +128,11 @@ impl RuntimeValue {
             RuntimeValue::StringLiteral(idx) => {
                 let value = match &heap_table[*idx] {
                     HeapObject::String(s) => s,
-                    _ => unreachable!(),
+                    obj => unreachable!("got {:?} instead of str", obj),
                 };
-                out.write_all(value.as_bytes())
+                out.write_all(b"\"")?;
+                out.write_all(value.as_bytes())?;
+                out.write_all(b"\"")
             }
             RuntimeValue::ArrayLiteral(idx) => {
                 let elements = match &heap_table[*idx] {
@@ -151,8 +153,8 @@ impl RuntimeValue {
             }
             RuntimeValue::SequenceLiteral(idx) => {
                 let elements = match &heap_table[*idx] {
-                    HeapObject::Array { elements, .. } => elements,
-                    _ => unreachable!(),
+                    HeapObject::Sequence { elements, .. } => elements,
+                    obj => unreachable!("expected SequenceLiteral, got {:?}", obj),
                 };
 
                 out.write_all(b"[")?;

@@ -6,7 +6,7 @@ use crate::{
     error_handler::{error_collector::ErrorCollector, errors::VynError},
     tokens::TokenType,
     type_checker::{static_evaluator::StaticEvaluator, symbol_type_table::SymbolTypeTable},
-    utils::throw_error,
+    utils::{Span, throw_error},
 };
 use core::fmt;
 use std::mem;
@@ -65,6 +65,30 @@ impl Type {
                 let t = Type::from_anotated_type(ta, static_eval, errors);
                 Type::Sequence(Box::new(t))
             }
+        }
+    }
+
+    pub fn get_type_default_value(t: &Type) -> Expression {
+        let expr = match t {
+            Self::String => Expr::StringLiteral(String::new()),
+            Self::Integer => Expr::IntegerLiteral(0),
+            Self::Float => Expr::FloatLiteral(0.0),
+            Self::Bool => Expr::BooleanLiteral(false),
+            Self::Array(ta, size) => {
+                let default_elem = Self::get_type_default_value(ta);
+
+                Expr::ArrayLiteral {
+                    elements: vec![Box::new(default_elem); *size],
+                }
+            }
+            Self::Sequence(_) => Expr::ArrayLiteral { elements: vec![] },
+
+            _ => unreachable!(),
+        };
+
+        Expression {
+            node: expr,
+            span: Span::default(),
         }
     }
 
@@ -163,7 +187,6 @@ impl<'a> TypeChecker<'a> {
             } => {
                 let expected_type =
                     Type::from_anotated_type(annotated_type, self.static_eval, &mut self.errors);
-                let value_type = self.check_expression(value, Some(expected_type.clone()))?;
 
                 let var_name = match &identifier.node {
                     Expr::Identifier(name) => name.clone(),
@@ -178,15 +201,18 @@ impl<'a> TypeChecker<'a> {
                     &mut self.errors,
                 )?;
 
-                if expected_type != value_type {
-                    self.throw_error(VynError::DeclarationTypeMismatch {
-                        expected: expected_type.clone(),
-                        got: value_type,
-                        span,
-                    });
-                    return Err(());
-                }
+                if let Some(val) = value {
+                    let value_type = self.check_expression(val, Some(expected_type.clone()))?;
 
+                    if expected_type != value_type {
+                        self.throw_error(VynError::DeclarationTypeMismatch {
+                            expected: expected_type.clone(),
+                            got: value_type,
+                            span,
+                        });
+                        return Err(());
+                    }
+                }
                 Ok(())
             }
 
@@ -205,6 +231,59 @@ impl<'a> TypeChecker<'a> {
                 self.loop_depth += 1;
                 let stmt = self.check_statement(body.as_ref());
                 self.loop_depth -= 1;
+
+                stmt
+            }
+
+            Stmt::IndexLoop {
+                body,
+                iterator,
+                range,
+            } => {
+                let iterator_name = match &iterator.node {
+                    Expr::Identifier(name) => name.clone(),
+                    _ => {
+                        self.throw_error(VynError::TypeMismatch {
+                            expected: vec![Type::Identifier],
+                            found: Type::Identifier, // placeholder
+                            span: iterator.span,
+                        });
+                        return Err(());
+                    }
+                };
+
+                let range_type = self.check_expression(range, Some(Type::Integer))?;
+
+                if range_type != Type::Integer {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![Type::Integer],
+                        found: range_type,
+                        span: range.span,
+                    });
+                    return Err(());
+                }
+
+                // Enter a new scope for the loop
+                let parent_table =
+                    mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new());
+                self.symbol_type_table = parent_table.enter_scope();
+
+                // Declare the iterator variable as an immutable Integer in the loop scope
+                self.symbol_type_table.declare_identifier(
+                    iterator_name,
+                    Type::Integer,
+                    iterator.span,
+                    false,
+                    &mut self.errors,
+                )?;
+
+                self.loop_depth += 1;
+                let stmt = self.check_statement(body.as_ref());
+                self.loop_depth -= 1;
+
+                // Exit the loop scope
+                self.symbol_type_table =
+                    mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new()).exit_scope();
 
                 stmt
             }

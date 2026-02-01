@@ -1,7 +1,10 @@
 use std::{collections::HashSet, mem, vec};
 
 use crate::{
-    ast::ast::{Expr, Expression, Program, Statement, Stmt},
+    ast::{
+        ast::{Expr, Expression, Program, Statement, Stmt},
+        type_annotation::TypeAnnotation,
+    },
     bytecode::bytecode::{Instructions, OpCode},
     compiler::{debug_info::DebugInfo, symbol_table::SymbolTable},
     error_handler::{error_collector::ErrorCollector, errors::VynError},
@@ -102,7 +105,12 @@ impl<'a> Compiler<'a> {
                     Type::from_anotated_type(&annotated_type, self.static_eval, &mut self.errors);
 
                 // Pass the expected type down to compile_expression
-                let value_reg = self.compile_expression(value, Some(&expected_type))?;
+
+                let exported_value = match value {
+                    Some(v) => v,
+                    _ => Type::get_type_default_value(&expected_type),
+                };
+                let value_reg = self.compile_expression(exported_value, Some(&expected_type))?;
                 self.pin_register(value_reg);
 
                 match self.symbol_table.declare_identifier(
@@ -439,7 +447,7 @@ impl<'a> Compiler<'a> {
                     }
                 }
 
-                self.free_register(target_reg); // This is fine - pinned registers won't actually free
+                self.free_register(target_reg);
                 self.free_register(property_reg);
 
                 Some(dest)
@@ -454,19 +462,14 @@ impl<'a> Compiler<'a> {
                 let target_type = self.get_expr_type(&target)?;
 
                 let target_reg = self.compile_expression(*target, None)?;
-
-                let index = match property.node {
-                    Expr::IntegerLiteral(v) => v as usize,
-                    _ => unreachable!(),
-                };
-
+                let index_reg = self.compile_expression(*property, Some(&Type::Integer))?;
                 let value_reg = self.compile_expression(*new_value, None)?;
 
                 match target_type {
                     Type::Array(_, _) | Type::Sequence(_) => {
                         self.emit(
                             OpCode::ArraySet,
-                            vec![target_reg as usize, index, value_reg as usize],
+                            vec![target_reg as usize, index_reg as usize, value_reg as usize],
                             span,
                         );
                     }
@@ -475,6 +478,7 @@ impl<'a> Compiler<'a> {
                 }
 
                 self.free_register(target_reg);
+                self.free_register(index_reg);
                 self.free_register(value_reg);
                 Some(target_reg)
             }
