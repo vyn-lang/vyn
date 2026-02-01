@@ -1,10 +1,7 @@
 use std::{collections::HashSet, mem, vec};
 
 use crate::{
-    ast::{
-        ast::{Expr, Expression, Program, Statement, Stmt},
-        type_annotation::TypeAnnotation,
-    },
+    ast::ast::{Expr, Expression, Program, Statement, Stmt},
     bytecode::bytecode::{Instructions, OpCode},
     compiler::{debug_info::DebugInfo, symbol_table::SymbolTable},
     error_handler::{error_collector::ErrorCollector, errors::VynError},
@@ -205,8 +202,6 @@ impl<'a> Compiler<'a> {
                 let jump_false_pos =
                     self.emit(OpCode::JumpIfFalse, vec![cond_idx as usize, 9999], span);
 
-                self.free_register(cond_idx);
-
                 self.try_compile_statement(*consequence)?;
 
                 let end_block = self.instructions.len();
@@ -231,6 +226,8 @@ impl<'a> Compiler<'a> {
                     let end_jmp_block = self.instructions.len();
                     OpCode::change_operand(&mut self.instructions, jump_pos, vec![end_jmp_block]);
                 }
+
+                self.free_register(cond_idx);
                 Some(())
             }
 
@@ -468,7 +465,7 @@ impl<'a> Compiler<'a> {
                 match target_type {
                     Type::Array(_, _) | Type::Sequence(_) => {
                         self.emit(
-                            OpCode::ArraySet,
+                            OpCode::ArraySetReg,
                             vec![target_reg as usize, index_reg as usize, value_reg as usize],
                             span,
                         );

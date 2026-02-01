@@ -247,6 +247,40 @@ impl VynVM {
                             elements[index] = value;
                         }
                         HeapObject::Sequence { elements } => {
+                            if index >= elements.len() {
+                                return Err(VynError::IndexOutOfBounds {
+                                    size: elements.len(),
+                                    idx: index as i64,
+                                    span: self.debug_info.get_span(self.ip),
+                                });
+                            }
+
+                            elements[index] = value;
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                OpCode::ARRAY_SET_REG => {
+                    let arr_reg_idx = read_uint8(&self.instructions, self.ip + 1) as usize;
+                    let index_reg = read_uint8(&self.instructions, self.ip + 2) as usize;
+                    let val_reg_idx = read_uint8(&self.instructions, self.ip + 3) as usize;
+                    self.ip += 3;
+
+                    let value = self.get_register(val_reg_idx).clone();
+
+                    let heap_idx = match self.get_register(arr_reg_idx) {
+                        RuntimeValue::ArrayLiteral(idx) => idx,
+                        RuntimeValue::SequenceLiteral(idx) => idx,
+                        unknown => unreachable!("Expected array in register, got {unknown:?}"),
+                    };
+
+                    let index = self.get_register(index_reg).as_int().unwrap() as usize;
+
+                    match self.get_heap_obj(heap_idx) {
+                        HeapObject::Array { elements, .. } => {
+                            elements[index] = value;
+                        }
+                        HeapObject::Sequence { elements } => {
                             if index > elements.len() {
                                 return Err(VynError::IndexOutOfBounds {
                                     size: elements.len(),

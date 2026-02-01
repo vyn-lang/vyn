@@ -158,6 +158,7 @@ fn is_register_operand(opcode: &OpCode, operand_index: usize) -> bool {
             operand_index == 0 || operand_index == 2
         }
         OpCode::ArrayGet => true,
+        OpCode::ArraySetReg => true,
         OpCode::ArrayPush => true,
 
         OpCode::Halt => false,

@@ -90,8 +90,9 @@ define_opcodes! {
     ArrayNewFixed, ARRAY_NEW_FIXED = 0x54,
     ArrayNewDynamic, ARRAY_NEW_DYNAMIC = 0x55,
     ArraySet, ARRAY_SET = 0x56,
-    ArrayGet, ARRAY_GET = 0x57,
-    ArrayPush, ARRAY_PUSH = 0x58,
+    ArraySetReg, ARRAY_SET_REG = 0x57,
+    ArrayGet, ARRAY_GET = 0x58,
+    ArrayPush, ARRAY_PUSH = 0x59,
 }
 
 impl From<OpCode> for u8 {
@@ -336,11 +337,15 @@ impl OpCode {
             },
             OpCode::ArrayNewDynamic => Definition {
                 name: "ARRAY_NEW_DYNAMIC",
-                operands_width: vec![1, 4], // dest, init_cap
+                operands_width: vec![1, 4], // dest,
             },
             OpCode::ArraySet => Definition {
                 name: "ARRAY_SET",
-                operands_width: vec![1, 4, 1], // array_reg, index_reg, value_reg
+                operands_width: vec![1, 4, 1], // array_reg, index_u32, value_reg
+            },
+            OpCode::ArraySetReg => Definition {
+                name: "ARRAY_SET_REG",
+                operands_width: vec![1, 1, 1], // array_reg, index_reg, value_reg
             },
             OpCode::ArrayGet => Definition {
                 name: "ARRAY_GET",

@@ -627,6 +627,8 @@ impl Parser {
 
         if self.current_token_type() != TokenType::Assign {
             if self.current_token_type().is_delimiter() {
+                self.advance();
+
                 return Some(
                     Stmt::VariableDeclaration {
                         identifier: ident,
@@ -646,6 +648,8 @@ impl Parser {
 
             return None;
         }
+
+        self.advance(); // Consume the Assign token
 
         let value = self.try_parse_expression(Precedence::Default.into())?;
 
