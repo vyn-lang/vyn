@@ -40,6 +40,7 @@ pub enum Token {
     Colon,
     Newline,
     Dot,
+    RangeDot,
     BoxColon, // ::
 
     // Grouping
@@ -74,8 +75,8 @@ pub enum Token {
     Continue,
     For,
     When,
-    Every,
-    In,
+    From,
+    Steps,
 }
 
 impl fmt::Display for Token {
@@ -126,6 +127,7 @@ pub enum TokenType {
     Colon,
     Newline,
     Dot,
+    RangeDot,
     BoxColon, // ::
 
     // Grouping
@@ -160,8 +162,8 @@ pub enum TokenType {
     Continue,
     For,
     When,
-    Every,
-    In,
+    From,
+    Steps,
 }
 
 impl TokenType {
@@ -207,6 +209,7 @@ impl fmt::Display for TokenType {
             TokenType::Colon => write!(f, ":"),
             TokenType::Newline => write!(f, "newline"),
             TokenType::Dot => write!(f, "."),
+            TokenType::RangeDot => write!(f, ".."),
             TokenType::BoxColon => write!(f, "::"),
 
             // Grouping
@@ -241,8 +244,8 @@ impl fmt::Display for TokenType {
             TokenType::Continue => write!(f, "continue"),
             TokenType::For => write!(f, "for"),
             TokenType::When => write!(f, "when"),
-            TokenType::Every => write!(f, "every"),
-            TokenType::In => write!(f, "in"),
+            TokenType::From => write!(f, "from"),
+            TokenType::Steps => write!(f, "steps"),
         }
     }
 }
@@ -269,8 +272,8 @@ impl Token {
             "break" => Token::Break,
             "for" => Token::For,
             "when" => Token::When,
-            "every" => Token::Every,
-            "in" => Token::In,
+            "from" => Token::From,
+            "steps" => Token::Steps,
             _ => Token::Identifier(identifier.to_string()),
         }
     }
@@ -308,6 +311,7 @@ impl Token {
             Token::Colon => TokenType::Colon,
             Token::Newline => TokenType::Newline,
             Token::Dot => TokenType::Dot,
+            Token::RangeDot => TokenType::RangeDot,
             Token::BoxColon => TokenType::BoxColon,
 
             // Grouping
@@ -342,8 +346,8 @@ impl Token {
             Token::Continue => TokenType::Continue,
             Token::For => TokenType::For,
             Token::When => TokenType::When,
-            Token::Every => TokenType::Every,
-            Token::In => TokenType::In,
+            Token::From => TokenType::From,
+            Token::Steps => TokenType::Steps,
         }
     }
 }

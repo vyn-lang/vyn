@@ -236,54 +236,135 @@ impl<'a> TypeChecker<'a> {
             }
 
             Stmt::IndexLoop {
+                init,
+                start_range,
+                end_range,
+                steps,
                 body,
-                iterator,
-                range,
             } => {
-                let iterator_name = match &iterator.node {
-                    Expr::Identifier(name) => name.clone(),
-                    _ => {
-                        self.throw_error(VynError::TypeMismatch {
-                            expected: vec![Type::Identifier],
-                            found: Type::Identifier, // placeholder
-                            span: iterator.span,
-                        });
-                        return Err(());
-                    }
-                };
+                self.loop_depth += 1;
 
-                let range_type = self.check_expression(range, Some(Type::Integer))?;
-
-                if range_type != Type::Integer {
-                    self.throw_error(VynError::TypeMismatch {
-                        expected: vec![Type::Integer],
-                        found: range_type,
-                        span: range.span,
-                    });
-                    return Err(());
-                }
-
-                // Enter a new scope for the loop
+                // Enter a new scope for the loop variable
                 let parent_table =
                     mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new());
                 self.symbol_type_table = parent_table.enter_scope();
 
-                // Declare the iterator variable as an immutable Integer in the loop scope
-                self.symbol_type_table.declare_identifier(
-                    iterator_name,
-                    Type::Integer,
-                    iterator.span,
-                    false,
+                let init_ident = match init.node.clone() {
+                    Stmt::VariableDeclaration { identifier, .. } => identifier.clone(),
+                    _ => unreachable!(),
+                };
+
+                let init_ident_name = match init_ident.node.clone() {
+                    Expr::Identifier(n) => n,
+                    _ => unreachable!(),
+                };
+
+                let init_type = self.check_statement(init)?;
+                let start_range_type = self.check_expression(start_range, None)?;
+                let end_range_type = self.check_expression(end_range, None)?;
+
+                let init_ident_info = self.symbol_type_table.resolve_identifier(
+                    &init_ident_name,
+                    init.span,
                     &mut self.errors,
                 )?;
 
-                self.loop_depth += 1;
-                let stmt = self.check_statement(body.as_ref());
-                self.loop_depth -= 1;
+                let range_span = Span {
+                    line: start_range.span.line,
+                    start_column: start_range.span.start_column,
+                    end_column: end_range.span.end_column,
+                };
 
-                // Exit the loop scope
+                if init_ident_info.symbol_type != Type::Float
+                    && init_ident_info.symbol_type != Type::Integer
+                {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![Type::Float, Type::Integer],
+                        found: init_ident_info.symbol_type.clone(),
+                        span,
+                    });
+
+                    // Exit scope before returning
+                    self.symbol_type_table =
+                        mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new())
+                            .exit_scope();
+                    self.loop_depth -= 1;
+                    return Err(());
+                }
+
+                if !init_ident_info.mutable {
+                    self.throw_error(VynError::ImmutableMutation {
+                        identifier: init_ident_name,
+                        span: init.span,
+                        mutation_span: range_span,
+                    });
+
+                    // Exit scope before returning
+                    self.symbol_type_table =
+                        mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new())
+                            .exit_scope();
+                    self.loop_depth -= 1;
+                    return Err(());
+                }
+
+                if init_ident_info.symbol_type != start_range_type {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![init_ident_info.symbol_type.clone()],
+                        found: start_range_type,
+                        span: start_range.span,
+                    });
+
+                    // Exit scope before returning
+                    self.symbol_type_table =
+                        mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new())
+                            .exit_scope();
+                    self.loop_depth -= 1;
+                    return Err(());
+                }
+
+                if start_range_type != end_range_type {
+                    self.throw_error(VynError::TypeMismatch {
+                        expected: vec![start_range_type],
+                        found: end_range_type,
+                        span: range_span,
+                    });
+
+                    // Exit scope before returning
+                    self.symbol_type_table =
+                        mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new())
+                            .exit_scope();
+                    self.loop_depth -= 1;
+                    return Err(());
+                }
+
+                // Type check the step expression if provided
+                if let Some(step_expr) = steps {
+                    let expected_step_type = init_ident_info.symbol_type.clone();
+                    let step_type =
+                        self.check_expression(step_expr, Some(expected_step_type.clone()))?;
+
+                    if step_type != expected_step_type {
+                        self.throw_error(VynError::TypeMismatch {
+                            expected: vec![expected_step_type],
+                            found: step_type,
+                            span: step_expr.span,
+                        });
+
+                        // Exit scope before returning
+                        self.symbol_type_table =
+                            mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new())
+                                .exit_scope();
+                        self.loop_depth -= 1;
+                        return Err(());
+                    }
+                }
+
+                let stmt = self.check_statement(body.as_ref());
+
+                // Exit scope after checking body
                 self.symbol_type_table =
                     mem::replace(&mut self.symbol_type_table, SymbolTypeTable::new()).exit_scope();
+                self.loop_depth -= 1;
 
                 stmt
             }

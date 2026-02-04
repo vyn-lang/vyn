@@ -1,11 +1,13 @@
 use std::collections::HashMap;
 
 use crate::{
-    ast::ast::{Expr, Expression, Program, Statement, Stmt},
+    ast::{
+        ast::{Expr, Expression, Program, Statement, Stmt},
+        type_annotation::TypeAnnotation,
+    },
     error_handler::{error_collector::ErrorCollector, errors::VynError},
     parser::{lookups::Precedence, type_parser::TypeTable},
     tokens::{Token, TokenInfo, TokenType},
-    type_checker::type_checker::TypeChecker,
     utils::{Span, Spanned},
 };
 
@@ -53,8 +55,11 @@ impl Parser {
         parser.register_nud(TokenType::LeftBracket, Parser::parse_array_literal);
 
         parser.register_nud(TokenType::Minus, Parser::parse_unary_expr);
-        parser.register_nud(TokenType::Not, Parser::parse_unary_expr);
         parser.register_nud(TokenType::LeftParenthesis, Parser::parse_grouping_expr);
+
+        parser.register_nud(TokenType::Not, Parser::parse_unary_expr);
+        parser.register_led(TokenType::And, Parser::parse_binary_expr);
+        parser.register_led(TokenType::Or, Parser::parse_binary_expr);
 
         parser.register_led(TokenType::Plus, Parser::parse_binary_expr);
         parser.register_led(TokenType::Minus, Parser::parse_binary_expr);
@@ -592,9 +597,8 @@ impl Parser {
 
 // Statements
 impl Parser {
-    pub fn parse_variable_decl(&mut self) -> Option<Statement> {
-        let let_tok = self.current_token().clone();
-        self.advance();
+    fn parse_variable_header(&mut self) -> Option<(Expression, TypeAnnotation, bool)> {
+        self.advance(); // consume 'let'
 
         let mut mutable = false;
         if self.current_token_is(TokenType::At) {
@@ -619,6 +623,14 @@ impl Parser {
 
         let an_type = self.try_parse_type()?;
 
+        Some((ident, an_type, mutable))
+    }
+
+    pub fn parse_variable_decl(&mut self) -> Option<Statement> {
+        let let_tok = self.current_token().clone();
+
+        let (ident, an_type, mutable) = self.parse_variable_header()?;
+
         let mut full_span = Span {
             line: let_tok.span.line,
             start_column: let_tok.span.start_column,
@@ -626,8 +638,12 @@ impl Parser {
         };
 
         if self.current_token_type() != TokenType::Assign {
-            if self.current_token_type().is_delimiter() {
-                self.advance();
+            if self.current_token_type().is_delimiter()
+                || self.current_token_type() == TokenType::From
+            {
+                if self.current_token_type().is_delimiter() {
+                    self.advance();
+                }
 
                 return Some(
                     Stmt::VariableDeclaration {
@@ -909,36 +925,69 @@ impl Parser {
                 return Some(stmt);
             }
 
-            TokenType::Every => {
-                self.advance();
+            TokenType::Let => {
+                let let_tok = self.current_token().clone();
 
-                let iterator = self.parse_identifier_literal()?;
+                let (identifier, annotated_type, mutable) = self.parse_variable_header()?;
 
-                if !self.expect(TokenType::In) {
+                if !self.expect(TokenType::From) {
                     return None;
                 }
 
-                let range = self.try_parse_expression(Precedence::Default.into())?;
+                let start_range = self.try_parse_expression(Precedence::Default.into())?;
+
+                if !self.expect(TokenType::RangeDot) {
+                    return None;
+                }
+
+                let end_range = self.try_parse_expression(Precedence::Default.into())?;
+
+                let mut steps = None;
+                if self.current_token_type() == TokenType::Steps {
+                    self.advance(); // consume 'steps'
+                    steps = Some(self.try_parse_expression(Precedence::Default.into())?);
+                }
+
                 let body = self.parse_scope_stmt()?;
 
-                let stmt = Stmt::IndexLoop {
-                    body: Box::new(body),
-                    iterator,
-                    range,
-                }
-                .spanned(for_tok_info.span);
+                let var_span = Span {
+                    line: let_tok.span.line,
+                    start_column: let_tok.span.start_column,
+                    end_column: identifier.span.end_column,
+                };
 
-                return Some(stmt);
+                let variable = Stmt::VariableDeclaration {
+                    identifier,
+                    value: None,
+                    annotated_type,
+                    mutable,
+                }
+                .spanned(var_span);
+
+                let full_span = Span {
+                    line: for_tok_info.span.line,
+                    start_column: for_tok_info.span.start_column,
+                    end_column: body.span.end_column,
+                };
+
+                let stmt = Stmt::IndexLoop {
+                    init: Box::new(variable),
+                    start_range,
+                    end_range,
+                    steps,
+                    body: Box::new(body),
+                }
+                .spanned(full_span);
+
+                Some(stmt)
             }
 
             _ => {
-                self.advance();
-
                 self.errors.add(VynError::UnexpectedToken {
                     token: self.current_token_type(),
                     span: self.current_token().span,
                 });
-                return None;
+                None
             }
         }
     }

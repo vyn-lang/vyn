@@ -187,10 +187,6 @@ impl Lexer {
                 self.advance();
                 Token::RightBracket
             }
-            Some('.') => {
-                self.advance();
-                Token::Dot
-            }
             Some(',') => {
                 self.advance();
                 Token::Comma
@@ -236,6 +232,16 @@ impl Lexer {
                     Token::BoxColon
                 } else {
                     Token::Colon
+                }
+            }
+
+            Some('.') => {
+                self.advance();
+                if self.current() == Some('.') {
+                    self.advance();
+                    Token::RangeDot
+                } else {
+                    Token::Dot
                 }
             }
 

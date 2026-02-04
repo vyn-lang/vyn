@@ -27,7 +27,7 @@ impl TypeChecker<'_> {
                 }
                 Ok(right_type)
             }
-            TokenType::Bang => {
+            TokenType::Not => {
                 if right_type != Type::Bool {
                     self.throw_error(VynError::TypeMismatch {
                         expected: vec![Type::Bool],

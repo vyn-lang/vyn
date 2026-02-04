@@ -159,9 +159,11 @@ pub enum Stmt {
         condition: Expression,
     },
     IndexLoop {
+        init: Box<Statement>,
+        start_range: Expression,
+        end_range: Expression,
+        steps: Option<Expression>,
         body: Box<Statement>,
-        iterator: Expression,
-        range: Expression,
     },
     Continue,
     Break,
