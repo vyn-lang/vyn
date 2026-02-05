@@ -4,7 +4,7 @@ use crate::{
         type_annotation::TypeAnnotation,
     },
     error_handler::{error_collector::ErrorCollector, errors::VynError},
-    tokens::TokenType,
+    tokens::{Token, TokenType},
     type_checker::{static_evaluator::StaticEvaluator, symbol_type_table::SymbolTypeTable},
     utils::{Span, throw_error},
 };
@@ -64,6 +64,103 @@ impl Type {
             TypeAnnotation::SequenceType(ta) => {
                 let t = Type::from_anotated_type(ta, static_eval, errors);
                 Type::Sequence(Box::new(t))
+            }
+        }
+    }
+
+    /// Infer the type from an AST expression
+    pub fn from_ast(
+        expr: &Expression,
+        static_eval: &StaticEvaluator,
+        symbol_table: &SymbolTypeTable,
+        errors: &mut ErrorCollector,
+    ) -> Self {
+        match &expr.node {
+            Expr::IntegerLiteral(_) => Self::Integer,
+            Expr::FloatLiteral(_) => Self::Float,
+            Expr::BooleanLiteral(_) => Self::Bool,
+            Expr::StringLiteral(_) => Self::String,
+            Expr::NilLiteral => Self::Nil,
+
+            Expr::ArrayLiteral { elements } => {
+                if elements.is_empty() {
+                    // Empty array - we can't infer the type
+                    // this shoulf be unreachable
+                    errors.add(VynError::TypeInfer {
+                        expr: expr.node.clone(),
+                        span: expr.span,
+                    });
+                    unreachable!()
+                } else {
+                    // Infer from first element
+                    let elem_type = Self::from_ast(&elements[0], static_eval, symbol_table, errors);
+                    let size = elements.len();
+                    Self::Array(Box::new(elem_type), size)
+                }
+            }
+
+            Expr::Identifier(name) => {
+                match symbol_table.resolve_identifier(name, expr.span, errors) {
+                    Ok(symbol) => symbol.symbol_type.clone(),
+                    Err(_) => unreachable!(),
+                }
+            }
+
+            Expr::Unary { operator, right } => {
+                let operand_type = Self::from_ast(right, static_eval, symbol_table, errors);
+
+                match operator {
+                    Token::Minus => operand_type, // Negation preserves type
+                    Token::Bang => Self::Bool,    // Logical NOT returns bool
+                    _ => unreachable!(),
+                }
+            }
+
+            Expr::BinaryOperation {
+                left,
+                operator,
+                right,
+            } => {
+                let left_type = Self::from_ast(left, static_eval, symbol_table, errors);
+                let _right_type = Self::from_ast(right, static_eval, symbol_table, errors);
+
+                match operator {
+                    // Arithmetic operators preserve type (int + int = int, float + float = float)
+                    Token::Plus | Token::Minus | Token::Asterisk | Token::Slash | Token::Caret => {
+                        left_type
+                    }
+
+                    // Comparison operators return bool
+                    Token::Equal
+                    | Token::NotEqual
+                    | Token::LessThan
+                    | Token::LessThanEqual
+                    | Token::GreaterThan
+                    | Token::GreaterThanEqual => Self::Bool,
+
+                    // Logical operators return bool
+                    Token::And | Token::Or => Self::Bool,
+
+                    _ => unreachable!(),
+                }
+            }
+
+            Expr::Index { target, .. } => {
+                let target_type = Self::from_ast(target, static_eval, symbol_table, errors);
+
+                match target_type {
+                    Self::Array(elem_type, _) => *elem_type,
+                    Self::Sequence(elem_type) => *elem_type,
+                    _ => unreachable!(),
+                }
+            }
+
+            Expr::VariableAssignment { new_value, .. } => {
+                Self::from_ast(new_value, static_eval, symbol_table, errors)
+            }
+
+            Expr::IndexAssignment { new_value, .. } => {
+                Self::from_ast(new_value, static_eval, symbol_table, errors)
             }
         }
     }

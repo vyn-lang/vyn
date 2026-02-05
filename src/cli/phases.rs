@@ -10,6 +10,7 @@ pub enum Phase {
     Parsing,
     StaticEvaluation,
     TypeChecking,
+    IRBuilding,
     Compiling,
 }
 
@@ -20,6 +21,7 @@ impl Phase {
             Phase::Parsing => "Parsing",
             Phase::StaticEvaluation => "Evaluating Statics",
             Phase::TypeChecking => "Type Checking",
+            Phase::IRBuilding => "IR Building",
             Phase::Compiling => "Compiling",
         }
     }
@@ -27,19 +29,21 @@ impl Phase {
     fn progress_start(&self) -> u64 {
         match self {
             Phase::Tokenizing => 0,
-            Phase::Parsing => 20,
-            Phase::StaticEvaluation => 40,
-            Phase::TypeChecking => 60,
+            Phase::Parsing => 16,
+            Phase::StaticEvaluation => 32,
+            Phase::TypeChecking => 48,
+            Phase::IRBuilding => 64,
             Phase::Compiling => 80,
         }
     }
 
     fn progress_end(&self) -> u64 {
         match self {
-            Phase::Tokenizing => 20,
-            Phase::Parsing => 40,
-            Phase::StaticEvaluation => 60,
-            Phase::TypeChecking => 80,
+            Phase::Tokenizing => 16,
+            Phase::Parsing => 32,
+            Phase::StaticEvaluation => 48,
+            Phase::TypeChecking => 64,
+            Phase::IRBuilding => 80,
             Phase::Compiling => 100,
         }
     }
