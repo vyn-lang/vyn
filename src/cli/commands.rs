@@ -1,5 +1,6 @@
 use crate::cli::args::{CliArgs, Commands};
 use crate::cli::phases::{Phase, PhaseTracker};
+use crate::compiler::compiler::VynCompiler;
 use crate::ir::builder::VynIRBuilder;
 use crate::lexer::Lexer;
 use crate::parser::parser::Parser;
@@ -103,6 +104,21 @@ impl CommandHandler {
             }
         };
         tracker.complete_phase(Phase::IRBuilding);
+
+        // Compiling
+        tracker.begin_phase(Phase::Compiling);
+        let mut compiler = VynCompiler::new();
+        let bc = match compiler.compile_ir(&ir) {
+            Ok(bc) => bc,
+            Err(errors) => {
+                tracker.clear_display();
+                if !self.args.quiet {
+                    errors.report_all(&source);
+                }
+                return Err(1);
+            }
+        };
+        tracker.complete_phase(Phase::Compiling);
 
         tracker.finish();
 

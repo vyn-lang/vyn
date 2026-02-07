@@ -38,6 +38,8 @@ impl<'a> VynIRBuilder<'a> {
             self.build_stmt(stmt);
         }
 
+        self.emit(VynIROpCode::Halt);
+
         if self.error_collector.has_errors() {
             Err(mem::take(&mut self.error_collector))
         } else {

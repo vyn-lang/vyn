@@ -25,4 +25,6 @@ pub enum VynIROpCode {
 
     // Logging
     LogAddr { addr: VReg },
+
+    Halt,
 }
