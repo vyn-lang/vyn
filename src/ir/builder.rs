@@ -3,11 +3,12 @@ use std::mem;
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
     error_handler::error_collector::ErrorCollector,
-    ir::ir_instr::{VReg, VynIROpCode},
+    ir::ir_instr::{VReg, VynIROC, VynIROpCode},
     tokens::Token,
     type_checker::{
         static_evaluator::StaticEvaluator, symbol_type_table::SymbolTypeTable, type_checker::Type,
     },
+    utils::Span,
 };
 
 pub struct VynIRBuilder<'a> {
@@ -35,10 +36,10 @@ impl<'a> VynIRBuilder<'a> {
 
     pub fn build_ir(&mut self, program: &Program) -> Result<VynIR, ErrorCollector> {
         for stmt in &program.statements {
-            self.build_stmt(stmt);
+            self.build_stmt(stmt, stmt.span);
         }
 
-        self.emit(VynIROpCode::Halt);
+        self.emit(VynIROC::Halt.spanned(Span::default()));
 
         if self.error_collector.has_errors() {
             Err(mem::take(&mut self.error_collector))
@@ -47,7 +48,7 @@ impl<'a> VynIRBuilder<'a> {
         }
     }
 
-    fn build_stmt(&mut self, stmt: &Statement) {
+    fn build_stmt(&mut self, stmt: &Statement, span: Span) {
         match &stmt.node {
             Stmt::Expression { expression } => {
                 self.build_expr(expression);
@@ -55,7 +56,7 @@ impl<'a> VynIRBuilder<'a> {
 
             Stmt::StdoutLog { log_value } => {
                 let vreg = self.build_expr(log_value);
-                self.emit(VynIROpCode::LogAddr { addr: vreg });
+                self.emit(VynIROC::LogAddr { addr: vreg }.spanned(span));
             }
 
             unknown => todo!("Implement stmt {:?} at IR", unknown),
@@ -66,13 +67,14 @@ impl<'a> VynIRBuilder<'a> {
         match &expr.node {
             Expr::IntegerLiteral(i) => {
                 let dest = self.allocate_vreg();
-                self.emit(VynIROpCode::LoadConstInt { dest, value: *i });
+                self.emit(VynIROC::LoadConstInt { dest, value: *i }.spanned(expr.span));
                 dest
             }
 
             Expr::FloatLiteral(f) => {
                 let dest = self.allocate_vreg();
-                self.emit(VynIROpCode::LoadConstFloat { dest, value: *f });
+                self.emit(VynIROC::LoadConstFloat { dest, value: *f }.spanned(expr.span));
+
                 dest
             }
 
@@ -97,13 +99,13 @@ impl<'a> VynIRBuilder<'a> {
                 let opcode = match operator {
                     Token::Plus => {
                         if is_op_int {
-                            VynIROpCode::AddInt {
+                            VynIROC::AddInt {
                                 dest,
                                 left: b_left,
                                 right: b_right,
                             }
                         } else {
-                            VynIROpCode::AddFloat {
+                            VynIROC::AddFloat {
                                 dest,
                                 left: b_left,
                                 right: b_right,
@@ -112,13 +114,13 @@ impl<'a> VynIRBuilder<'a> {
                     }
                     Token::Minus => {
                         if is_op_int {
-                            VynIROpCode::SubInt {
+                            VynIROC::SubInt {
                                 dest,
                                 left: b_left,
                                 right: b_right,
                             }
                         } else {
-                            VynIROpCode::SubFloat {
+                            VynIROC::SubFloat {
                                 dest,
                                 left: b_left,
                                 right: b_right,
@@ -127,13 +129,13 @@ impl<'a> VynIRBuilder<'a> {
                     }
                     Token::Asterisk => {
                         if is_op_int {
-                            VynIROpCode::MulInt {
+                            VynIROC::MulInt {
                                 dest,
                                 left: b_left,
                                 right: b_right,
                             }
                         } else {
-                            VynIROpCode::MulFloat {
+                            VynIROC::MulFloat {
                                 dest,
                                 left: b_left,
                                 right: b_right,
@@ -142,13 +144,13 @@ impl<'a> VynIRBuilder<'a> {
                     }
                     Token::Slash => {
                         if is_op_int {
-                            VynIROpCode::DivInt {
+                            VynIROC::DivInt {
                                 dest,
                                 left: b_left,
                                 right: b_right,
                             }
                         } else {
-                            VynIROpCode::DivFloat {
+                            VynIROC::DivFloat {
                                 dest,
                                 left: b_left,
                                 right: b_right,
@@ -157,13 +159,13 @@ impl<'a> VynIRBuilder<'a> {
                     }
                     Token::Caret => {
                         if is_op_int {
-                            VynIROpCode::ExpInt {
+                            VynIROC::ExpInt {
                                 dest,
                                 left: b_left,
                                 right: b_right,
                             }
                         } else {
-                            VynIROpCode::ExpFloat {
+                            VynIROC::ExpFloat {
                                 dest,
                                 left: b_left,
                                 right: b_right,
@@ -174,7 +176,7 @@ impl<'a> VynIRBuilder<'a> {
                     _ => unreachable!(),
                 };
 
-                self.emit(opcode);
+                self.emit(opcode.spanned(expr.span));
 
                 dest
             }

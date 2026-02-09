@@ -1,6 +1,7 @@
 use crate::cli::args::{CliArgs, Commands};
 use crate::cli::phases::{Phase, PhaseTracker};
 use crate::compiler::compiler::VynCompiler;
+use crate::compiler::disassembler::disassemble;
 use crate::ir::builder::VynIRBuilder;
 use crate::lexer::Lexer;
 use crate::parser::parser::Parser;
@@ -127,6 +128,8 @@ impl CommandHandler {
             for (i, instr) in ir.instructions.iter().enumerate() {
                 println!("  {}: {:?}", i, instr);
             }
+            println!("\n{}", "Disassembled Bytecode:".bright_green().bold());
+            disassemble(&bc);
         }
 
         Ok(())

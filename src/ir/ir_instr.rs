@@ -1,7 +1,11 @@
+use crate::utils::{Span, Spanned};
+
 pub type VReg = u32;
 
+pub type VynIROpCode = Spanned<VynIROC>;
+
 #[derive(Debug, Clone)]
-pub enum VynIROpCode {
+pub enum VynIROC {
     // ===== Arithmetic - Integer =====
     AddInt { dest: VReg, left: VReg, right: VReg },
     SubInt { dest: VReg, left: VReg, right: VReg },
@@ -27,4 +31,10 @@ pub enum VynIROpCode {
     LogAddr { addr: VReg },
 
     Halt,
+}
+
+impl VynIROC {
+    pub fn spanned(self, span: Span) -> Spanned<Self> {
+        Spanned { node: self, span }
+    }
 }

@@ -1,4 +1,8 @@
-use crate::ir::ir_instr::VynIROpCode;
+use crate::{
+    error_handler::errors::VynError,
+    ir::ir_instr::{VynIROC, VynIROpCode},
+    utils::Span,
+};
 use std::collections::{HashMap, HashSet};
 
 /*
@@ -104,12 +108,12 @@ impl RegisterAllocator {
      * # Halt -> None (doesn't write to a register)
      * */
     fn get_def(&self, inst: &VynIROpCode) -> Option<u32> {
-        match inst {
-            VynIROpCode::LoadConstInt { dest, .. } => Some(*dest),
-            VynIROpCode::AddInt { dest, .. } => Some(*dest),
-            VynIROpCode::ExpInt { dest, .. } => Some(*dest),
-            VynIROpCode::LogAddr { .. } => None,
-            VynIROpCode::Halt => None,
+        match &inst.node {
+            VynIROC::LoadConstInt { dest, .. } => Some(*dest),
+            VynIROC::AddInt { dest, .. } => Some(*dest),
+            VynIROC::ExpInt { dest, .. } => Some(*dest),
+            VynIROC::LogAddr { .. } => None,
+            VynIROC::Halt => None,
             _ => None,
         }
     }
@@ -129,12 +133,12 @@ impl RegisterAllocator {
      * # LogAddr { addr: 4 } -> vec![4]
      * */
     fn get_uses(&self, inst: &VynIROpCode) -> Vec<u32> {
-        match inst {
-            VynIROpCode::LoadConstInt { .. } => vec![],
-            VynIROpCode::AddInt { left, right, .. } => vec![*left, *right],
-            VynIROpCode::ExpInt { left, right, .. } => vec![*left, *right],
-            VynIROpCode::LogAddr { addr } => vec![*addr],
-            VynIROpCode::Halt => vec![],
+        match &inst.node {
+            VynIROC::LoadConstInt { .. } => vec![],
+            VynIROC::AddInt { left, right, .. } => vec![*left, *right],
+            VynIROC::ExpInt { left, right, .. } => vec![*left, *right],
+            VynIROC::LogAddr { addr } => vec![*addr],
+            VynIROC::Halt => vec![],
             _ => vec![],
         }
     }
@@ -160,7 +164,12 @@ impl RegisterAllocator {
      * # analyze_liveness() must be called before this
      * # This function updates internal allocation tables
      * */
-    pub fn allocate(&mut self, virtual_reg: u32, inst_index: usize) -> Result<u8, String> {
+    pub fn allocate(
+        &mut self,
+        virtual_reg: u32,
+        inst_index: usize,
+        span: Span,
+    ) -> Result<u8, VynError> {
         // If already allocated, return the existing physical register
         if let Some(&phys) = self.allocation.get(&virtual_reg) {
             return Ok(phys);
@@ -187,10 +196,7 @@ impl RegisterAllocator {
         }
 
         // Complete failure - all registers hold live values
-        Err(format!(
-            "Out of registers at instruction {}: all {} registers hold live values",
-            inst_index, self.max_registers
-        ))
+        Err(VynError::RegisterOverflow { span })
     }
 
     /*
@@ -237,11 +243,11 @@ impl RegisterAllocator {
      *   been allocated via allocate()
      * # Commonly used for getting operand registers when compiling instructions
      * */
-    pub fn get(&self, virtual_reg: u32) -> Result<u8, String> {
+    pub fn get(&self, virtual_reg: u32) -> Result<u8, VynError> {
         self.allocation
             .get(&virtual_reg)
             .copied()
-            .ok_or_else(|| format!("Virtual register {} not allocated", virtual_reg))
+            .ok_or_else(|| unreachable!())
     }
 
     /*
