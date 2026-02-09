@@ -1,8 +1,10 @@
 use std::mem;
 
 use crate::{
+    compiler::register_allocator::RegisterAllocator,
     error_handler::error_collector::ErrorCollector,
     ir::{builder::VynIR, ir_instr::VynIROpCode},
+    vyn_vm::vm::MAX_REGISTERS,
 };
 
 /*
@@ -14,6 +16,7 @@ use crate::{
  * */
 pub struct VynCompiler {
     instructions: Vec<u8>,
+    register_allocator: RegisterAllocator,
     error_collector: ErrorCollector,
 }
 
@@ -26,6 +29,7 @@ impl VynCompiler {
     pub fn new() -> Self {
         Self {
             instructions: Vec::new(),
+            register_allocator: RegisterAllocator::new(MAX_REGISTERS), // vm max register
             error_collector: ErrorCollector::new(),
         }
     }
@@ -38,9 +42,12 @@ impl VynCompiler {
      * -- Return value; Result<Bytecode, ErrorCollector>
      * */
     pub fn compile_ir(&mut self, ir: &VynIR) -> Result<Bytecode, ErrorCollector> {
+        self.register_allocator.analyze_liveness(&ir.instructions);
+
         for inst in &ir.instructions {
             self.compile_inst(inst);
         }
+
         if self.error_collector.has_errors() {
             Err(mem::take(&mut self.error_collector))
         } else {
@@ -55,11 +62,15 @@ impl VynCompiler {
      * -- Arguments: [&mut self], IR OpCode
      * -- Return value: void
      * */
-    pub(crate) fn compile_inst(&mut self, inst: &VynIROpCode) {
+    pub(crate) fn compile_inst(&mut self, inst: &VynIROpCode) -> Option<()> {
         match &inst {
-            VynIROpCode::LoadConstInt { dest, value } => {}
+            VynIROpCode::LoadConstInt { dest, value } => {
+                let dest = self.register_allocator.allocate(virtual_reg, inst_index)
+            }
             unknown => todo!("Implement inst {unknown:?}"),
         }
+
+        Some(())
     }
 
     /*

@@ -12,7 +12,7 @@
 // pub const TRUE: RuntimeValue = RuntimeValue::BooleanLiteral(true);
 // pub const FALSE: RuntimeValue = RuntimeValue::BooleanLiteral(false);
 //
-// const MAX_REGISTERS: usize = 256;
+pub const MAX_REGISTERS: u8 = 255;
 // type Registers = [RuntimeValue; MAX_REGISTERS];
 //
 // pub struct VynVM {
