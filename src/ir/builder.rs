@@ -78,6 +78,19 @@ impl<'a> VynIRBuilder<'a> {
                 dest
             }
 
+            Expr::StringLiteral(s) => {
+                let dest = self.allocate_vreg();
+                self.emit(
+                    VynIROC::LoadString {
+                        dest,
+                        value: s.clone(),
+                    }
+                    .spanned(expr.span),
+                );
+
+                dest
+            }
+
             Expr::BinaryOperation {
                 left,
                 operator,

@@ -23,6 +23,7 @@ pub enum VynIROC {
     // ===== Load Constants =====
     LoadConstInt { dest: VReg, value: i32 },
     LoadConstFloat { dest: VReg, value: f64 },
+    LoadString { dest: VReg, value: String },
     LoadBoolTrue { dest: VReg },
     LoadBoolFalse { dest: VReg },
     LoadNil { dest: VReg },

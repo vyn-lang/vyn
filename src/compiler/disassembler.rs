@@ -12,7 +12,7 @@ pub fn disassemble(bytecode: &Bytecode) {
     println!();
     disassemble_constants(&bytecode.constants);
     println!();
-    disassemble_string_table(/*&bytecode.string_table*/ &vec![]);
+    disassemble_string_table(&bytecode.string_table);
 }
 
 fn disassemble_instructions(instructions: &Instructions, debug_info: &DebugInfo) {

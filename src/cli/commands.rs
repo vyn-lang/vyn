@@ -110,7 +110,7 @@ impl CommandHandler {
         // Compiling
         tracker.begin_phase(Phase::Compiling);
         let mut compiler = VynCompiler::new();
-        let bc = match compiler.compile_ir(&ir) {
+        let mut bc = match compiler.compile_ir(&ir) {
             Ok(bc) => bc,
             Err(errors) => {
                 tracker.clear_display();
@@ -133,7 +133,7 @@ impl CommandHandler {
             disassemble(&bc);
         }
 
-        let mut vm = VynVM::new(bc);
+        let mut vm = VynVM::new(&mut bc);
         vm.execute();
 
         Ok(())

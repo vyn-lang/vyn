@@ -1,10 +1,13 @@
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    mem,
+};
 
 use crate::{
     bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16, read_uint32},
     compiler::{compiler::Bytecode, debug_info::DebugInfo},
     error_handler::errors::VynError,
-    runtime_value::{heap::HeapObject, values::RuntimeValue},
+    runtime_value::values::RuntimeValue,
 };
 
 // Singletons for common values
@@ -21,7 +24,7 @@ pub struct VynVM {
     // Constant pool
     pub(crate) constants: Vec<RuntimeValue>,
 
-    pub(crate) heap_table: Vec<HeapObject>,
+    pub(crate) string_table: Vec<String>,
     // Program bytecode
     pub(crate) instructions: Instructions,
     // Instruction pointer
@@ -31,15 +34,13 @@ pub struct VynVM {
 }
 
 impl VynVM {
-    pub fn new(bytecode: Bytecode) -> Self {
-        let mut heap_table: Vec<HeapObject> = Vec::new();
-
+    pub fn new(bytecode: &mut Bytecode) -> Self {
         Self {
             registers: [NIL; MAX_REGISTERS as usize],
-            constants: bytecode.constants,
-            heap_table,
-            instructions: bytecode.instructions,
-            debug_info: bytecode.debug_info,
+            constants: mem::take(&mut bytecode.constants),
+            string_table: mem::take(&mut bytecode.string_table),
+            instructions: mem::take(&mut bytecode.instructions),
+            debug_info: mem::take(&mut bytecode.debug_info),
             ip: 0,
         }
     }
@@ -169,162 +170,6 @@ impl VynVM {
                     self.ip = jump_idx as usize;
                     continue;
                 }
-
-                OpCode::STORE_GLOBAL => {
-                    unreachable!() // no scopes yet
-                }
-                OpCode::LOAD_GLOBAL => {
-                    unreachable!() // no scopes yet
-                }
-
-                OpCode::ARRAY_NEW_FIXED => {
-                    let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
-                    let length = read_uint32(&self.instructions, self.ip + 2) as usize;
-                    self.ip += 5;
-
-                    let heap_arr = HeapObject::Array {
-                        elements: vec![NIL; length], // Will patched by ARRAY_SET
-                        size: length,
-                    };
-
-                    let arr_idx = self.push_heap(heap_arr);
-                    self.set_register(dest, RuntimeValue::ArrayLiteral(arr_idx));
-                }
-                OpCode::ARRAY_NEW_DYNAMIC => {
-                    let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
-                    let init_cap = read_uint32(&self.instructions, self.ip + 2) as usize;
-                    self.ip += 5;
-
-                    let heap_arr = HeapObject::Sequence {
-                        elements: Vec::with_capacity(init_cap),
-                    };
-
-                    let arr_idx = self.push_heap(heap_arr);
-                    self.set_register(dest, RuntimeValue::SequenceLiteral(arr_idx));
-                }
-                OpCode::ARRAY_PUSH => {
-                    let arr_reg_idx = read_uint8(&self.instructions, self.ip + 1) as usize;
-                    let val_reg_idx = read_uint8(&self.instructions, self.ip + 2) as usize;
-                    self.ip += 2;
-
-                    let value = self.get_register(val_reg_idx).clone();
-
-                    let heap_idx = match self.get_register(arr_reg_idx) {
-                        RuntimeValue::SequenceLiteral(idx) => idx,
-                        unknown => unreachable!("Expected array in register, got {unknown:?}"),
-                    };
-
-                    if let HeapObject::Sequence { elements } = self.get_heap_obj(heap_idx) {
-                        if elements.len() >= elements.capacity() {
-                            let new_capacity = elements.capacity() * 2;
-                            elements.reserve(new_capacity - elements.len());
-                        }
-
-                        elements.push(value);
-                    }
-                }
-                OpCode::ARRAY_SET => {
-                    let arr_reg_idx = read_uint8(&self.instructions, self.ip + 1) as usize;
-                    let index = read_uint32(&self.instructions, self.ip + 2) as usize;
-                    let val_reg_idx = read_uint8(&self.instructions, self.ip + 6) as usize;
-                    self.ip += 6;
-
-                    let value = self.get_register(val_reg_idx).clone();
-
-                    let heap_idx = match self.get_register(arr_reg_idx) {
-                        RuntimeValue::ArrayLiteral(idx) => idx,
-                        RuntimeValue::SequenceLiteral(idx) => idx,
-                        unknown => unreachable!("Expected array in register, got {unknown:?}"),
-                    };
-
-                    match self.get_heap_obj(heap_idx) {
-                        HeapObject::Array { elements, .. } => {
-                            elements[index] = value;
-                        }
-                        HeapObject::Sequence { elements } => {
-                            if index >= elements.len() {
-                                return Err(VynError::IndexOutOfBounds {
-                                    size: elements.len(),
-                                    idx: index as i64,
-                                    span: self.debug_info.get_span(self.ip),
-                                });
-                            }
-
-                            elements[index] = value;
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                OpCode::ARRAY_SET_REG => {
-                    let arr_reg_idx = read_uint8(&self.instructions, self.ip + 1) as usize;
-                    let index_reg = read_uint8(&self.instructions, self.ip + 2) as usize;
-                    let val_reg_idx = read_uint8(&self.instructions, self.ip + 3) as usize;
-                    self.ip += 3;
-
-                    let value = self.get_register(val_reg_idx).clone();
-
-                    let heap_idx = match self.get_register(arr_reg_idx) {
-                        RuntimeValue::ArrayLiteral(idx) => idx,
-                        RuntimeValue::SequenceLiteral(idx) => idx,
-                        unknown => unreachable!("Expected array in register, got {unknown:?}"),
-                    };
-
-                    let index = self.get_register(index_reg).as_int().unwrap() as usize;
-
-                    match self.get_heap_obj(heap_idx) {
-                        HeapObject::Array { elements, .. } => {
-                            elements[index] = value;
-                        }
-                        HeapObject::Sequence { elements } => {
-                            if index > elements.len() {
-                                return Err(VynError::IndexOutOfBounds {
-                                    size: elements.len(),
-                                    idx: index as i64,
-                                    span: self.debug_info.get_span(self.ip),
-                                });
-                            }
-
-                            elements[index] = value;
-                        }
-                        _ => unreachable!(),
-                    }
-                }
-                OpCode::ARRAY_GET => {
-                    let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
-                    let arr_ptr_idx = read_uint8(&self.instructions, self.ip + 2) as usize;
-                    let index_reg = read_uint8(&self.instructions, self.ip + 3) as usize; // READ AS REGISTER!
-                    self.ip += 3;
-
-                    let arr_ptr = match self.get_register(arr_ptr_idx) {
-                        RuntimeValue::ArrayLiteral(ptr) => ptr,
-                        RuntimeValue::SequenceLiteral(ptr) => ptr,
-                        _ => unreachable!(),
-                    };
-
-                    let idx = match self.get_register(index_reg) {
-                        RuntimeValue::IntegerLiteral(i) => i as usize,
-                        _ => unreachable!("Array index must be an integer"),
-                    };
-
-                    let heap_arr = match self.get_heap_obj(arr_ptr) {
-                        HeapObject::Array { elements, .. } => elements[idx],
-                        HeapObject::Sequence { elements, .. } => {
-                            if idx > elements.len() {
-                                return Err(VynError::IndexOutOfBounds {
-                                    size: elements.len(),
-                                    idx: idx as i64,
-                                    span: self.debug_info.get_span(self.ip),
-                                });
-                            }
-
-                            elements[idx]
-                        }
-                        _ => unreachable!(),
-                    };
-
-                    self.set_register(dest, heap_arr);
-                }
-
                 OpCode::MOVE => {
                     let dest = read_uint8(&self.instructions, self.ip + 1) as usize;
                     let src = read_uint8(&self.instructions, self.ip + 2) as usize;
@@ -342,7 +187,7 @@ impl VynVM {
                     let stdout = io::stdout();
                     let mut out = stdout.lock();
 
-                    value.write_to(&mut out, &self.heap_table).unwrap();
+                    value.write_to(&mut out, &self.string_table).unwrap();
                     out.write_all(b"\n").unwrap();
                 }
 
@@ -364,9 +209,8 @@ impl VynVM {
     }
 
     pub(crate) fn intern_string(&mut self, str: String) -> usize {
-        let string = HeapObject::String(str);
-        self.heap_table.push(string);
-        self.heap_table.len() - 1
+        self.string_table.push(str);
+        self.string_table.len() - 1
     }
 
     // For debugging
@@ -387,19 +231,7 @@ impl VynVM {
         occupied
     }
 
-    pub(crate) fn push_heap(&mut self, value: HeapObject) -> usize {
-        self.heap_table.push(value);
-        self.heap_table.len() - 1
-    }
-
-    pub(crate) fn get_heap_obj(&mut self, idx: usize) -> &mut HeapObject {
-        &mut self.heap_table[idx]
-    }
-
     pub fn get_string(&self, idx: usize) -> &str {
-        match &self.heap_table[idx] {
-            HeapObject::String(s) => s.as_str(),
-            _ => unreachable!(),
-        }
+        self.string_table.get(idx).unwrap()
     }
 }

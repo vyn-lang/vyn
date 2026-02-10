@@ -2,8 +2,6 @@ use core::fmt;
 use std::fmt::{Display, Formatter};
 use std::io::{self, Write};
 
-use crate::runtime_value::heap::HeapObject;
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RuntimeValue {
     IntegerLiteral(i32),
@@ -120,54 +118,51 @@ impl RuntimeValue {
 }
 
 impl RuntimeValue {
-    pub fn write_to<W: Write>(&self, out: &mut W, heap_table: &[HeapObject]) -> io::Result<()> {
+    pub fn write_to<W: Write>(&self, out: &mut W, string_table: &[String]) -> io::Result<()> {
         match self {
             RuntimeValue::IntegerLiteral(n) => write!(out, "{n}"),
             RuntimeValue::FloatLiteral(n) => write!(out, "{n}"),
             RuntimeValue::BooleanLiteral(b) => write!(out, "{b}"),
             RuntimeValue::StringLiteral(idx) => {
-                let value = match &heap_table[*idx] {
-                    HeapObject::String(s) => s,
-                    obj => unreachable!("got {:?} instead of str", obj),
-                };
+                let value = &string_table[*idx];
                 out.write_all(b"\"")?;
                 out.write_all(value.as_bytes())?;
                 out.write_all(b"\"")
             }
-            RuntimeValue::ArrayLiteral(idx) => {
-                let elements = match &heap_table[*idx] {
-                    HeapObject::Array { elements, .. } => elements,
-                    _ => unreachable!(),
-                };
-
-                out.write_all(b"[")?;
-
-                for (i, elem) in elements.iter().enumerate() {
-                    elem.write_to(out, heap_table)?;
-                    if i != elements.len() - 1 {
-                        out.write_all(b", ")?;
-                    }
-                }
-
-                out.write_all(b"]")
-            }
-            RuntimeValue::SequenceLiteral(idx) => {
-                let elements = match &heap_table[*idx] {
-                    HeapObject::Sequence { elements, .. } => elements,
-                    obj => unreachable!("expected SequenceLiteral, got {:?}", obj),
-                };
-
-                out.write_all(b"[")?;
-
-                for (i, elem) in elements.iter().enumerate() {
-                    elem.write_to(out, heap_table)?;
-                    if i != elements.len() - 1 {
-                        out.write_all(b", ")?;
-                    }
-                }
-
-                out.write_all(b"]")
-            }
+            RuntimeValue::ArrayLiteral(idx) => out.write_all(b"arr_unimplemented"),
+            //     let elements = match &heap_table[*idx] {
+            //         HeapObject::Array { elements, .. } => elements,
+            //         _ => unreachable!(),
+            //     };
+            //
+            //     out.write_all(b"[")?;
+            //
+            //     for (i, elem) in elements.iter().enumerate() {
+            //         elem.write_to(out, heap_table)?;
+            //         if i != elements.len() - 1 {
+            //             out.write_all(b", ")?;
+            //         }
+            //     }
+            //
+            //     out.write_all(b"]")
+            // }
+            RuntimeValue::SequenceLiteral(idx) => out.write_all(b"seq_unimplemented"),
+            //     let elements = match &heap_table[*idx] {
+            //         HeapObject::Sequence { elements, .. } => elements,
+            //         obj => unreachable!("expected SequenceLiteral, got {:?}", obj),
+            //     };
+            //
+            //     out.write_all(b"[")?;
+            //
+            //     for (i, elem) in elements.iter().enumerate() {
+            //         elem.write_to(out, heap_table)?;
+            //         if i != elements.len() - 1 {
+            //             out.write_all(b", ")?;
+            //         }
+            //     }
+            //
+            //     out.write_all(b"]")
+            // }
             RuntimeValue::NilLiteral => out.write_all(b"nil"),
         }
     }

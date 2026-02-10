@@ -24,6 +24,8 @@ pub struct VynCompiler {
     instructions: Vec<u8>,
     constants: Vec<RuntimeValue>,
     debug_info: DebugInfo,
+    string_table: Vec<String>,
+
     register_allocator: RegisterAllocator,
     error_collector: ErrorCollector,
 }
@@ -39,6 +41,7 @@ pub struct VynCompiler {
 pub struct Bytecode {
     pub instructions: Vec<u8>,
     pub constants: Vec<RuntimeValue>,
+    pub string_table: Vec<String>,
     pub debug_info: DebugInfo,
 }
 
@@ -53,6 +56,7 @@ impl VynCompiler {
         Self {
             instructions: Vec::new(),
             constants: Vec::new(),
+            string_table: Vec::new(),
             debug_info: DebugInfo::new(),
             register_allocator: RegisterAllocator::new(MAX_REGISTERS),
             error_collector: ErrorCollector::new(),
@@ -72,10 +76,8 @@ impl VynCompiler {
      *                  Err(ErrorCollector) if compilation fails
      * */
     pub fn compile_ir(&mut self, ir: &VynIR) -> Result<Bytecode, ErrorCollector> {
-        // Phase 1: Analyze register liveness
         self.register_allocator.analyze_liveness(&ir.instructions);
 
-        // Phase 2: Generate bytecode with register allocation
         for (i, inst) in ir.instructions.iter().enumerate() {
             if self.compile_inst(inst, i).is_none() {
                 break;
@@ -106,6 +108,10 @@ impl VynCompiler {
      * */
     pub(crate) fn compile_inst(&mut self, inst: &VynIROpCode, inst_idx: usize) -> Option<()> {
         match &inst.node {
+            /*
+             * Emits a LoadConstInt OpCode
+             * -- Operands: [dest, const_idx]
+             * */
             VynIROC::LoadConstInt { dest, value } => {
                 let dest = self.allocate(*dest, inst_idx, inst.span)?;
                 let const_idx = self.add_constant(RuntimeValue::IntegerLiteral(*value));
@@ -117,6 +123,10 @@ impl VynCompiler {
                 );
             }
 
+            /*
+             * Emits a LoadConstFloat OpCode
+             * -- Operands: [dest, const_idx]
+             * */
             VynIROC::LoadConstFloat { dest, value } => {
                 let dest = self.allocate(*dest, inst_idx, inst.span)?;
                 let const_idx = self.add_constant(RuntimeValue::FloatLiteral(*value));
@@ -128,6 +138,20 @@ impl VynCompiler {
                 );
             }
 
+            VynIROC::LoadString { dest, value } => {
+                let dest = self.allocate(*dest, inst_idx, inst.span)?;
+                let string_idx = self.intern_string(value.clone());
+                self.emit(
+                    OpCode::LoadString,
+                    vec![dest as usize, string_idx],
+                    inst.span,
+                );
+            }
+
+            /*
+             * Compiles a binary expression OpCode
+             * -- Operands: [dest, left_reg, right_reg]
+             * */
             VynIROC::AddInt { dest, left, right }
             | VynIROC::AddFloat { dest, left, right }
             | VynIROC::SubInt { dest, left, right }
@@ -171,6 +195,10 @@ impl VynCompiler {
                 self.free(*right, inst_idx + 1);
             }
 
+            /*
+             * Compiles to an stdout printer
+             * -- Operands: [addr]
+             * */
             VynIROC::LogAddr { addr } => {
                 let val = self.get(*addr, inst.span)?;
 
@@ -180,6 +208,10 @@ impl VynCompiler {
                 self.free(*addr, inst_idx + 1);
             }
 
+            /*
+             * Emits Halt at the end of the instruction
+             * -- Operands: []
+             * */
             VynIROC::Halt => {
                 self.emit(OpCode::Halt, vec![], inst.span);
             }
@@ -268,7 +300,7 @@ impl VynCompiler {
         let inst = OpCode::make(opcode, operands);
         for data in inst {
             self.instructions.push(data);
-            // Record span for each byte (RLE compression happens automatically)
+            // Record span for each byte
             self.debug_info.add_span(self.instructions.len() - 1, span);
         }
 
@@ -282,12 +314,33 @@ impl VynCompiler {
      * -- Return value: u16 - index of constant in pool
      *
      * -- Notes:
-     * # Does not deduplicate constants (each add creates new entry)
      * # Returns index as u16 (supports up to 65536 constants)
      * */
     fn add_constant(&mut self, value: RuntimeValue) -> u16 {
+        if let Some(idx) = self.constants.iter().position(|c| c == &value) {
+            return idx as u16;
+        }
+
         self.constants.push(value);
         (self.constants.len() - 1) as u16
+    }
+
+    /*
+     * Registers a string to the string_table
+     *
+     * -- Arguments: [&mut self], value - string to be registered
+     *
+     * -- Notes:
+     * # If the string already exists, it'll return the index
+     * # If not, it will register the string AND return the index
+     * */
+    fn intern_string(&mut self, string: String) -> usize {
+        if let Some(index) = self.string_table.iter().position(|s| s == &string) {
+            return index;
+        }
+
+        self.string_table.push(string);
+        self.string_table.len() - 1
     }
 
     /*
@@ -304,6 +357,7 @@ impl VynCompiler {
         Bytecode {
             instructions: mem::take(&mut self.instructions),
             constants: mem::take(&mut self.constants),
+            string_table: mem::take(&mut self.string_table),
             debug_info: mem::take(&mut self.debug_info),
         }
     }
