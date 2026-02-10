@@ -196,6 +196,47 @@ impl VynCompiler {
             }
 
             /*
+             * Compiles a Comparison expression
+             * -- Operands: [dest, left_reg, right_reg]
+             * */
+            VynIROC::CompareLessInt { dest, left, right }
+            | VynIROC::CompareLessFloat { dest, left, right }
+            | VynIROC::CompareGreaterInt { dest, left, right }
+            | VynIROC::CompareGreaterFloat { dest, left, right }
+            | VynIROC::CompareLessEqualInt { dest, left, right }
+            | VynIROC::CompareLessEqualFloat { dest, left, right }
+            | VynIROC::CompareGreaterEqualInt { dest, left, right }
+            | VynIROC::CompareGreaterEqualFloat { dest, left, right }
+            | VynIROC::CompareEqual { dest, left, right }
+            | VynIROC::CompareNotEqual { dest, left, right } => {
+                let left_reg = self.get(*left, inst.span)?;
+                let right_reg = self.get(*right, inst.span)?;
+                let dest = self.allocate(*dest, inst_idx, inst.span)?;
+
+                let opcode = match &inst.node {
+                    VynIROC::CompareGreaterInt { .. } => OpCode::GreaterInt,
+                    VynIROC::CompareGreaterFloat { .. } => OpCode::GreaterFloat,
+                    VynIROC::CompareLessInt { .. } => OpCode::LessInt,
+                    VynIROC::CompareLessFloat { .. } => OpCode::LessFloat,
+                    VynIROC::CompareGreaterEqualInt { .. } => OpCode::GreaterEqualInt,
+                    VynIROC::CompareGreaterEqualFloat { .. } => OpCode::GreaterEqualFloat,
+                    VynIROC::CompareLessEqualInt { .. } => OpCode::LessEqualInt,
+                    VynIROC::CompareLessEqualFloat { .. } => OpCode::LessEqualFloat,
+                    VynIROC::CompareEqual { .. } => OpCode::Equal,
+                    VynIROC::CompareNotEqual { .. } => OpCode::NotEqual,
+                    _ => unreachable!(),
+                };
+
+                self.emit(
+                    opcode,
+                    vec![dest as usize, left_reg as usize, right_reg as usize],
+                    inst.span,
+                );
+                self.free(*left, inst_idx);
+                self.free(*right, inst_idx);
+            }
+
+            /*
              * Compiles to an stdout printer
              * -- Operands: [addr]
              * */

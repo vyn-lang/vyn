@@ -4,7 +4,6 @@ use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
     error_handler::error_collector::ErrorCollector,
     ir::ir_instr::{VReg, VynIROC, VynIROpCode},
-    tokens::Token,
     type_checker::{
         static_evaluator::StaticEvaluator, symbol_type_table::SymbolTypeTable, type_checker::Type,
     },
@@ -13,10 +12,10 @@ use crate::{
 
 pub struct VynIRBuilder<'a> {
     instructions: Vec<VynIROpCode>,
-    error_collector: ErrorCollector,
     next_register: VReg,
-    static_eval: &'a StaticEvaluator,
-    symbol_table: &'a SymbolTypeTable,
+    pub(crate) error_collector: ErrorCollector,
+    pub(crate) static_eval: &'a StaticEvaluator,
+    pub(crate) symbol_table: &'a SymbolTypeTable,
 }
 
 pub struct VynIR {
@@ -63,7 +62,7 @@ impl<'a> VynIRBuilder<'a> {
         }
     }
 
-    fn build_expr(&mut self, expr: &Expression) -> VReg {
+    pub(crate) fn build_expr(&mut self, expr: &Expression) -> VReg {
         match &expr.node {
             Expr::IntegerLiteral(i) => {
                 let dest = self.allocate_vreg();
@@ -95,116 +94,19 @@ impl<'a> VynIRBuilder<'a> {
                 left,
                 operator,
                 right,
-            } => {
-                let b_left = self.build_expr(left.as_ref());
-                let b_right = self.build_expr(right.as_ref());
-                let dest = self.allocate_vreg();
-
-                // Get the type properly
-                let expr_type = Type::from_ast(
-                    left,
-                    self.static_eval,
-                    self.symbol_table,
-                    &mut self.error_collector,
-                );
-                let is_op_int = matches!(expr_type, Type::Integer);
-
-                let opcode = match operator {
-                    Token::Plus => {
-                        if is_op_int {
-                            VynIROC::AddInt {
-                                dest,
-                                left: b_left,
-                                right: b_right,
-                            }
-                        } else {
-                            VynIROC::AddFloat {
-                                dest,
-                                left: b_left,
-                                right: b_right,
-                            }
-                        }
-                    }
-                    Token::Minus => {
-                        if is_op_int {
-                            VynIROC::SubInt {
-                                dest,
-                                left: b_left,
-                                right: b_right,
-                            }
-                        } else {
-                            VynIROC::SubFloat {
-                                dest,
-                                left: b_left,
-                                right: b_right,
-                            }
-                        }
-                    }
-                    Token::Asterisk => {
-                        if is_op_int {
-                            VynIROC::MulInt {
-                                dest,
-                                left: b_left,
-                                right: b_right,
-                            }
-                        } else {
-                            VynIROC::MulFloat {
-                                dest,
-                                left: b_left,
-                                right: b_right,
-                            }
-                        }
-                    }
-                    Token::Slash => {
-                        if is_op_int {
-                            VynIROC::DivInt {
-                                dest,
-                                left: b_left,
-                                right: b_right,
-                            }
-                        } else {
-                            VynIROC::DivFloat {
-                                dest,
-                                left: b_left,
-                                right: b_right,
-                            }
-                        }
-                    }
-                    Token::Caret => {
-                        if is_op_int {
-                            VynIROC::ExpInt {
-                                dest,
-                                left: b_left,
-                                right: b_right,
-                            }
-                        } else {
-                            VynIROC::ExpFloat {
-                                dest,
-                                left: b_left,
-                                right: b_right,
-                            }
-                        }
-                    }
-
-                    _ => unreachable!(),
-                };
-
-                self.emit(opcode.spanned(expr.span));
-
-                dest
-            }
+            } => self.build_binary_expr(left, operator, right, expr),
 
             unknown => todo!("Implement expr {:?} at IR", unknown),
         }
     }
 
-    fn allocate_vreg(&mut self) -> VReg {
+    pub(crate) fn allocate_vreg(&mut self) -> VReg {
         let reg = self.next_register;
         self.next_register += 1;
         reg
     }
 
-    fn emit(&mut self, opcode: VynIROpCode) {
+    pub(crate) fn emit(&mut self, opcode: VynIROpCode) {
         self.instructions.push(opcode);
     }
 

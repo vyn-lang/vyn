@@ -20,6 +20,22 @@ pub enum VynIROC {
     DivFloat { dest: VReg, left: VReg, right: VReg },
     ExpFloat { dest: VReg, left: VReg, right: VReg },
 
+    // ===== Comparison - Int =====
+    CompareLessInt { dest: VReg, left: VReg, right: VReg },
+    CompareGreaterInt { dest: VReg, left: VReg, right: VReg },
+    CompareLessEqualInt { dest: VReg, left: VReg, right: VReg },
+    CompareGreaterEqualInt { dest: VReg, left: VReg, right: VReg },
+
+    // ===== Comparison - Float =====
+    CompareLessFloat { dest: VReg, left: VReg, right: VReg },
+    CompareGreaterFloat { dest: VReg, left: VReg, right: VReg },
+    CompareLessEqualFloat { dest: VReg, left: VReg, right: VReg },
+    CompareGreaterEqualFloat { dest: VReg, left: VReg, right: VReg },
+
+    // ===== Comparison - General =====
+    CompareNotEqual { dest: VReg, left: VReg, right: VReg },
+    CompareEqual { dest: VReg, left: VReg, right: VReg },
+
     // ===== Load Constants =====
     LoadConstInt { dest: VReg, value: i32 },
     LoadConstFloat { dest: VReg, value: f64 },
