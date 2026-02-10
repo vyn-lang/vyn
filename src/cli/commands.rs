@@ -7,6 +7,7 @@ use crate::lexer::Lexer;
 use crate::parser::parser::Parser;
 use crate::type_checker::static_evaluator::StaticEvaluator;
 use crate::type_checker::type_checker::TypeChecker;
+use crate::vyn_vm::vm::VynVM;
 use colored::*;
 use std::fs;
 use std::path::PathBuf;
@@ -131,6 +132,9 @@ impl CommandHandler {
             println!("\n{}", "Disassembled Bytecode:".bright_green().bold());
             disassemble(&bc);
         }
+
+        let mut vm = VynVM::new(bc);
+        vm.execute();
 
         Ok(())
     }
