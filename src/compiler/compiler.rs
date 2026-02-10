@@ -1,5 +1,7 @@
 use std::mem;
 
+use clap::error::KindFormatter;
+
 use crate::{
     bytecode::bytecode::OpCode,
     compiler::{debug_info::DebugInfo, register_allocator::RegisterAllocator},
@@ -138,6 +140,10 @@ impl VynCompiler {
                 );
             }
 
+            /*
+             * Emits a LoadString OpCode
+             * -- Operands: [dest, const_idx]
+             * */
             VynIROC::LoadString { dest, value } => {
                 let dest = self.allocate(*dest, inst_idx, inst.span)?;
                 let string_idx = self.intern_string(value.clone());
@@ -148,6 +154,19 @@ impl VynCompiler {
                 );
             }
 
+            /*
+             * Emits a Load[True/False] OpCode
+             * -- Operands: [dest, const_idx]
+             * */
+            VynIROC::LoadBool { dest, value } => {
+                let dest = self.allocate(*dest, inst_idx, inst.span)?;
+
+                if *value {
+                    self.emit(OpCode::LoadTrue, vec![dest as usize], inst.span);
+                } else {
+                    self.emit(OpCode::LoadFalse, vec![dest as usize], inst.span);
+                }
+            }
             /*
              * Compiles a binary expression OpCode
              * -- Operands: [dest, left_reg, right_reg]

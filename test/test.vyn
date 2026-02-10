@@ -1,7 +1,1 @@
-stdout# 10==10
-stdout# 10!=10
-stdout# 10<=10
-stdout# 10<=8
-stdout# 10>=2
-stdout# 10<0
-stdout# 10>0
+stdout# 10>0==true

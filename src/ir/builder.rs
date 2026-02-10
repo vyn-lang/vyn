@@ -2,6 +2,7 @@ use std::mem;
 
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
+    bytecode::bytecode::OpCode,
     error_handler::error_collector::ErrorCollector,
     ir::ir_instr::{VReg, VynIROC, VynIROpCode},
     type_checker::{
@@ -73,6 +74,13 @@ impl<'a> VynIRBuilder<'a> {
             Expr::FloatLiteral(f) => {
                 let dest = self.allocate_vreg();
                 self.emit(VynIROC::LoadConstFloat { dest, value: *f }.spanned(expr.span));
+
+                dest
+            }
+
+            Expr::BooleanLiteral(b) => {
+                let dest = self.allocate_vreg();
+                self.emit(VynIROC::LoadBool { dest, value: *b }.spanned(expr.span));
 
                 dest
             }
