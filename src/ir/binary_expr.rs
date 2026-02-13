@@ -1,6 +1,5 @@
 use crate::{
-    ast::ast::{Expr, Expression},
-    bytecode::bytecode::OpCode,
+    ast::ast::Expression,
     ir::{builder::VynIRBuilder, ir_instr::VynIROC},
     tokens::Token,
     type_checker::type_checker::Type,
@@ -13,15 +12,15 @@ impl VynIRBuilder<'_> {
         operator: &Token,
         right: &Box<Expression>,
         expr: &Expression,
-    ) -> u32 {
-        let b_left = self.build_expr(left.as_ref());
-        let b_right = self.build_expr(right.as_ref());
+    ) -> Option<u32> {
+        let b_left = self.build_expr(left.as_ref())?;
+        let b_right = self.build_expr(right.as_ref())?;
         let dest = self.allocate_vreg();
 
         let expr_type = Type::from_ast(
             left,
             self.static_eval,
-            self.symbol_table,
+            self.symbol_type_table,
             &mut self.error_collector,
         );
         let opcode = match operator {
@@ -41,7 +40,7 @@ impl VynIRBuilder<'_> {
 
         self.emit(opcode.spanned(expr.span));
 
-        dest
+        Some(dest)
     }
 
     fn build_arith_expr(

@@ -3,7 +3,6 @@ use crate::{
     error_handler::errors::VynError,
     tokens::{Token, TokenType},
     type_checker::type_checker::{Type, TypeChecker},
-    utils::Span,
 };
 
 impl TypeChecker<'_> {

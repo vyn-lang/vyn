@@ -1,10 +1,10 @@
 use std::mem;
 
-use clap::error::KindFormatter;
-
 use crate::{
     bytecode::bytecode::OpCode,
-    compiler::{debug_info::DebugInfo, register_allocator::RegisterAllocator},
+    compiler::{
+        debug_info::DebugInfo, register_allocator::RegisterAllocator, symbol_table::SymbolTable,
+    },
     error_handler::error_collector::ErrorCollector,
     ir::{
         builder::VynIR,
@@ -27,6 +27,7 @@ pub struct VynCompiler {
     constants: Vec<RuntimeValue>,
     debug_info: DebugInfo,
     string_table: Vec<String>,
+    symbol_table: SymbolTable,
 
     register_allocator: RegisterAllocator,
     error_collector: ErrorCollector,
@@ -44,6 +45,7 @@ pub struct Bytecode {
     pub instructions: Vec<u8>,
     pub constants: Vec<RuntimeValue>,
     pub string_table: Vec<String>,
+    pub symbol_table: SymbolTable,
     pub debug_info: DebugInfo,
 }
 
@@ -59,6 +61,7 @@ impl VynCompiler {
             instructions: Vec::new(),
             constants: Vec::new(),
             string_table: Vec::new(),
+            symbol_table: SymbolTable::new(),
             debug_info: DebugInfo::new(),
             register_allocator: RegisterAllocator::new(MAX_REGISTERS),
             error_collector: ErrorCollector::new(),
@@ -256,7 +259,7 @@ impl VynCompiler {
             }
 
             /*
-             * Compiles to an stdout printer
+             * Compiles to an stdout p rinter
              * -- Operands: [addr]
              * */
             VynIROC::LogAddr { addr } => {
@@ -266,6 +269,20 @@ impl VynCompiler {
 
                 // Free address register after use
                 self.free(*addr, inst_idx + 1);
+            }
+
+            VynIROC::StoreGlobal { value_reg } => {
+                self.emit(OpCode::StoreGlobal, vec![*value_reg as usize], inst.span);
+                self.free(*value_reg, inst_idx);
+            }
+
+            VynIROC::LoadGlobal { dest, global_idx } => {
+                let dest = self.allocate(*dest, inst_idx, inst.span)?;
+                self.emit(
+                    OpCode::LoadGlobal,
+                    vec![dest as usize, *global_idx],
+                    inst.span,
+                );
             }
 
             /*
@@ -417,6 +434,7 @@ impl VynCompiler {
         Bytecode {
             instructions: mem::take(&mut self.instructions),
             constants: mem::take(&mut self.constants),
+            symbol_table: mem::take(&mut self.symbol_table),
             string_table: mem::take(&mut self.string_table),
             debug_info: mem::take(&mut self.debug_info),
         }

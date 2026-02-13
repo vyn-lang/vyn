@@ -309,7 +309,7 @@ impl OpCode {
             },
             OpCode::StoreGlobal => Definition {
                 name: "STORE_GLOBAL",
-                operands_width: vec![2, 1],
+                operands_width: vec![1],
             },
             OpCode::LoadGlobal => Definition {
                 name: "LOAD_GLOBAL",

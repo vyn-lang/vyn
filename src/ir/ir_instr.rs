@@ -1,4 +1,7 @@
-use crate::utils::{Span, Spanned};
+use crate::{
+    type_checker::type_checker::Type,
+    utils::{Span, Spanned},
+};
 
 pub type VReg = u32;
 
@@ -42,6 +45,10 @@ pub enum VynIROC {
     LoadString { dest: VReg, value: String },
     LoadBool { dest: VReg, value: bool },
     LoadNil { dest: VReg },
+
+    // ===== Globals Interaction ====
+    LoadGlobal { dest: VReg, global_idx: usize },
+    StoreGlobal { value_reg: VReg },
 
     // Logging
     LogAddr { addr: VReg },

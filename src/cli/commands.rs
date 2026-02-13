@@ -127,16 +127,20 @@ impl CommandHandler {
         if !self.args.quiet {
             println!("\n{}", "Generated IR:".bright_green().bold());
             for (i, instr) in ir.instructions.iter().enumerate() {
-                println!("  {}: {:?}", i, instr);
+                println!("  {}: {:?}", i, instr.node);
             }
             println!("\n{}", "Disassembled Bytecode:".bright_green().bold());
             disassemble(&bc);
         }
 
         let mut vm = VynVM::new(&mut bc);
-        vm.execute();
-
-        Ok(())
+        match vm.execute() {
+            Ok(r) => Ok(r),
+            Err(ec) => {
+                ec.report(&source);
+                Err(2)
+            }
+        }
     }
 
     fn check_file(&self, file: &PathBuf) -> Result<(), i32> {
