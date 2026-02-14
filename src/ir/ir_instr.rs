@@ -1,9 +1,9 @@
-use crate::{
-    type_checker::type_checker::Type,
-    utils::{Span, Spanned},
-};
+use crate::utils::{Span, Spanned};
 
 pub type VReg = u32;
+
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub struct Label(pub usize);
 
 pub type VynIROpCode = Spanned<VynIROC>;
 
@@ -50,7 +50,12 @@ pub enum VynIROC {
     LoadGlobal { dest: VReg, global_idx: usize },
     StoreGlobal { value_reg: VReg },
 
-    // Logging
+    // ===== Jumps =====
+    JumpIfFalse { condition_reg: VReg, label: Label },
+    JumpUncond { label: Label },
+
+    // ===== Misc =====
+    Label(Label),
     LogAddr { addr: VReg },
 
     Halt,

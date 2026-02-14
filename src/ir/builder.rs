@@ -2,9 +2,9 @@ use std::mem;
 
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
-    error_handler::error_collector::ErrorCollector,
+    error_handler::error_collector::{self, ErrorCollector},
     ir::{
-        ir_instr::{VReg, VynIROC, VynIROpCode},
+        ir_instr::{Label, VReg, VynIROC, VynIROpCode},
         symbol_ir_table::{SymbolScope, SymbolTable},
     },
     type_checker::{
@@ -16,6 +16,7 @@ use crate::{
 pub struct VynIRBuilder<'a> {
     instructions: Vec<VynIROpCode>,
     next_register: VReg,
+    label_counter: usize,
     pub(crate) error_collector: ErrorCollector,
     pub(crate) static_eval: &'a StaticEvaluator,
     pub(crate) symbol_type_table: &'a SymbolTypeTable,
@@ -32,6 +33,7 @@ impl<'a> VynIRBuilder<'a> {
             instructions: Vec::new(),
             error_collector: ErrorCollector::new(),
             next_register: 0,
+            label_counter: 0,
             static_eval,
             symbol_type_table,
             symbol_table: SymbolTable::new(),
@@ -75,7 +77,7 @@ impl<'a> VynIRBuilder<'a> {
                     &mut self.error_collector,
                 );
 
-                let mut value_reg;
+                let value_reg;
 
                 if let Some(val) = value {
                     value_reg = self.build_expr(val)?;
@@ -89,14 +91,54 @@ impl<'a> VynIRBuilder<'a> {
                     value_reg = self.build_expr(&value)?;
                 }
 
-                let value_type = Type::from_anotated_type(
-                    annotated_type,
-                    &mut self.static_eval,
+                self.emit(VynIROC::StoreGlobal { value_reg }.spanned(span));
+                self.symbol_table.declare_ident(
+                    symbol_type,
+                    var_name,
+                    *mutable,
+                    span,
                     &mut self.error_collector,
                 );
-                self.emit(VynIROC::StoreGlobal { value_reg }.spanned(span));
-                self.symbol_table
-                    .declare_ident(symbol_type, var_name, *mutable);
+            }
+
+            Stmt::Scope { statements } => {
+                self.symbol_table.enter_scope();
+                for stmt in statements {
+                    self.build_stmt(stmt, stmt.span);
+                }
+                self.symbol_table.exit_scope();
+            }
+
+            Stmt::IfDeclaration {
+                condition,
+                consequence,
+                alternate,
+            } => {
+                let condition_reg = self.build_expr(condition)?;
+                let else_label = self.next_label();
+                let if_end_label = self.next_label();
+
+                self.emit(
+                    VynIROC::JumpIfFalse {
+                        condition_reg,
+                        label: else_label,
+                    }
+                    .spanned(span),
+                );
+
+                self.build_stmt(&consequence, span)?;
+                self.emit(
+                    VynIROC::JumpUncond {
+                        label: if_end_label,
+                    }
+                    .spanned(span),
+                );
+
+                self.emit_label(else_label);
+                if let Some(else_block) = alternate.as_ref() {
+                    self.build_stmt(else_block, span)?;
+                }
+                self.emit_label(if_end_label);
             }
 
             Stmt::StdoutLog { log_value } => {
@@ -176,6 +218,17 @@ impl<'a> VynIRBuilder<'a> {
         let reg = self.next_register;
         self.next_register += 1;
         reg
+    }
+
+    pub(crate) fn next_label(&mut self) -> Label {
+        let label = Label(self.label_counter);
+        self.label_counter += 1;
+        label
+    }
+
+    pub(crate) fn emit_label(&mut self, label: Label) {
+        self.instructions
+            .push(VynIROC::Label(label).spanned(Span::default()));
     }
 
     pub(crate) fn emit(&mut self, opcode: VynIROpCode) {

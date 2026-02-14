@@ -1,4 +1,6 @@
-use std::mem;
+use std::{collections::HashMap, mem};
+
+use byteorder::{BigEndian, ByteOrder, LittleEndian};
 
 use crate::{
     bytecode::bytecode::OpCode,
@@ -8,7 +10,7 @@ use crate::{
     error_handler::error_collector::ErrorCollector,
     ir::{
         builder::VynIR,
-        ir_instr::{VynIROC, VynIROpCode},
+        ir_instr::{Label, VynIROC, VynIROpCode},
     },
     runtime_value::values::RuntimeValue,
     utils::Span,
@@ -71,9 +73,10 @@ impl VynCompiler {
     /*
      * Loops through every instruction from given IR and compiles to bytecode
      *
-     * Performs two-phase compilation:
+     * Uses backpatching for jump resolution:
      * 1. Liveness analysis (via register allocator)
-     * 2. Code generation with register allocation
+     * 2. Code generation with placeholder jump offsets
+     * 3. Patch jumps with actual bytecode offsets
      *
      * -- Arguments: [&mut self], ir - intermediate representation from IR builder
      * -- Return value: Result<Bytecode, ErrorCollector>
@@ -83,10 +86,24 @@ impl VynCompiler {
     pub fn compile_ir(&mut self, ir: &VynIR) -> Result<Bytecode, ErrorCollector> {
         self.register_allocator.analyze_liveness(&ir.instructions);
 
+        let mut jump_patches: Vec<(usize, Label)> = Vec::new();
+        let mut label_positions: HashMap<Label, usize> = HashMap::new();
+
         for (i, inst) in ir.instructions.iter().enumerate() {
-            if self.compile_inst(inst, i).is_none() {
+            if self
+                .compile_inst(inst, i, &mut jump_patches, &mut label_positions)
+                .is_none()
+            {
                 break;
             }
+        }
+
+        // Backpatch all jump instructions with actual offsets
+        for (patch_pos, target_label) in jump_patches {
+            let target_offset = label_positions
+                .get(&target_label)
+                .expect("COMPILER BUG: Label not found in label_positions");
+            self.patch_jump(patch_pos, *target_offset);
         }
 
         if self.error_collector.has_errors() {
@@ -104,14 +121,23 @@ impl VynCompiler {
      * - Constant pool management
      * - Bytecode emission
      * - Register freeing after use
+     * - Jump instruction backpatching
      *
      * -- Arguments: [&mut self],
      *               inst - IR instruction to compile
      *               inst_idx - instruction index (for liveness analysis)
+     *               jump_patches - mutable vector to record jumps needing backpatching
+     *               label_positions - mutable map to record label bytecode positions
      * -- Return value: Some(()) if compilation succeeds
      *                  None if compilation fails (errors added to error_collector)
      * */
-    pub(crate) fn compile_inst(&mut self, inst: &VynIROpCode, inst_idx: usize) -> Option<()> {
+    pub(crate) fn compile_inst(
+        &mut self,
+        inst: &VynIROpCode,
+        inst_idx: usize,
+        jump_patches: &mut Vec<(usize, Label)>,
+        label_positions: &mut HashMap<Label, usize>,
+    ) -> Option<()> {
         match &inst.node {
             /*
              * Emits a LoadConstInt OpCode
@@ -170,6 +196,7 @@ impl VynCompiler {
                     self.emit(OpCode::LoadFalse, vec![dest as usize], inst.span);
                 }
             }
+
             /*
              * Compiles a binary expression OpCode
              * -- Operands: [dest, left_reg, right_reg]
@@ -185,8 +212,8 @@ impl VynCompiler {
             | VynIROC::ExpInt { dest, left, right }
             | VynIROC::ExpFloat { dest, left, right } => {
                 // Get physical registers for operands (already allocated)
-                let left_reg = self.get(*left, inst.span)?;
-                let right_reg = self.get(*right, inst.span)?;
+                let left_reg = self.get(*left)?;
+                let right_reg = self.get(*right)?;
 
                 // Allocate new physical register for destination
                 let dest_reg = self.allocate(*dest, inst_idx, inst.span)?;
@@ -231,8 +258,8 @@ impl VynCompiler {
             | VynIROC::CompareGreaterEqualFloat { dest, left, right }
             | VynIROC::CompareEqual { dest, left, right }
             | VynIROC::CompareNotEqual { dest, left, right } => {
-                let left_reg = self.get(*left, inst.span)?;
-                let right_reg = self.get(*right, inst.span)?;
+                let left_reg = self.get(*left)?;
+                let right_reg = self.get(*right)?;
                 let dest = self.allocate(*dest, inst_idx, inst.span)?;
 
                 let opcode = match &inst.node {
@@ -254,16 +281,16 @@ impl VynCompiler {
                     vec![dest as usize, left_reg as usize, right_reg as usize],
                     inst.span,
                 );
-                self.free(*left, inst_idx);
-                self.free(*right, inst_idx);
+                self.free(*left, inst_idx + 1);
+                self.free(*right, inst_idx + 1);
             }
 
             /*
-             * Compiles to an stdout p rinter
+             * Compiles to an stdout printer
              * -- Operands: [addr]
              * */
             VynIROC::LogAddr { addr } => {
-                let val = self.get(*addr, inst.span)?;
+                let val = self.get(*addr)?;
 
                 self.emit(OpCode::LogAddr, vec![val as usize], inst.span);
 
@@ -271,11 +298,20 @@ impl VynCompiler {
                 self.free(*addr, inst_idx + 1);
             }
 
+            /*
+             * Stores a value to global variable
+             * -- Operands: [value_reg]
+             * */
             VynIROC::StoreGlobal { value_reg } => {
-                self.emit(OpCode::StoreGlobal, vec![*value_reg as usize], inst.span);
-                self.free(*value_reg, inst_idx);
+                let reg = self.get(*value_reg)?;
+                self.emit(OpCode::StoreGlobal, vec![reg as usize], inst.span);
+                self.free(*value_reg, inst_idx + 1);
             }
 
+            /*
+             * Loads a global variable
+             * -- Operands: [dest, global_idx]
+             * */
             VynIROC::LoadGlobal { dest, global_idx } => {
                 let dest = self.allocate(*dest, inst_idx, inst.span)?;
                 self.emit(
@@ -283,6 +319,51 @@ impl VynCompiler {
                     vec![dest as usize, *global_idx],
                     inst.span,
                 );
+            }
+
+            /*
+             * Conditional jump (jump if condition is false)
+             * -- Operands: [condition_reg, offset]
+             * -- Note: offset is patched later via backpatching
+             * */
+            VynIROC::JumpIfFalse {
+                condition_reg,
+                label,
+            } => {
+                let cond_reg = self.get(*condition_reg)?;
+                let jump_pos = self.instructions.len();
+
+                // Emit with placeholder offset (0)
+                self.emit(OpCode::JumpIfFalse, vec![cond_reg as usize, 0], inst.span);
+
+                // Record position to patch (skip opcode byte + condition register byte)
+                jump_patches.push((jump_pos + 2, *label));
+
+                self.free(*condition_reg, inst_idx + 1);
+            }
+
+            /*
+             * Unconditional jump
+             * -- Operands: [offset]
+             * -- Note: offset is patched later via backpatching
+             * */
+            VynIROC::JumpUncond { label } => {
+                let jump_pos = self.instructions.len();
+
+                // Emit with placeholder offset (0)
+                self.emit(OpCode::JumpUncond, vec![0], inst.span);
+
+                // Record position to patch (skip opcode byte)
+                jump_patches.push((jump_pos + 1, *label));
+            }
+
+            /*
+             * Label marker - records bytecode position for jump targets
+             * -- Note: Does not emit any bytecode
+             * */
+            VynIROC::Label(label) => {
+                // Record current bytecode position for this label
+                label_positions.insert(*label, self.instructions.len());
             }
 
             /*
@@ -297,6 +378,24 @@ impl VynCompiler {
         }
 
         Some(())
+    }
+
+    /*
+     * Patches a jump instruction with the actual target offset
+     *
+     * Writes a 2-byte offset into the bytecode at the specified position.
+     * Uses little-endian encoding.
+     *
+     * -- Arguments: [&mut self],
+     *               position - bytecode offset where the jump offset should be written
+     *               target - bytecode offset of the jump target
+     * -- Return value: void
+     * */
+    fn patch_jump(&mut self, position: usize, target: usize) {
+        BigEndian::write_u16(
+            &mut self.instructions[position..position + 2],
+            target as u16,
+        );
     }
 
     /*
@@ -327,14 +426,13 @@ impl VynCompiler {
      *
      * -- Arguments: [&mut self],
      *               virtual_reg - virtual register ID to look up
-     *               _span - source location (unused, kept for consistency)
      * -- Return value: Some(physical_register) if found
      *
      * -- Notes:
      * # Panics if virtual register was never allocated (compiler bug)
      * # This should only be called for registers that were previously allocated
      * */
-    fn get(&mut self, virtual_reg: u32, _span: Span) -> Option<u8> {
+    fn get(&mut self, virtual_reg: u32) -> Option<u8> {
         match self.register_allocator.get(virtual_reg) {
             Ok(phys_reg) => Some(phys_reg),
             _ => unreachable!("COMPILER BUG: v{} was never allocated", virtual_reg),

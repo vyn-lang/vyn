@@ -1,2 +1,40 @@
-let x: Int
-stdout# x*2
+let x: Int = 5
+let y: Int = 10
+
+if x > 3 {
+    if y > 8 {
+        if x == 5 {
+            if y == 10 {
+                let result: Int = 100
+                stdout# result
+            } else {
+                let result: Int = 99
+                stdout# result
+            }
+        } else {
+            let result: Int = 50
+            stdout# result
+        }
+    } else {
+        if x > 4 {
+            let result: Int = 25
+            stdout# result
+        } else {
+            let result: Int = 20
+            stdout# result
+        }
+    }
+} else {
+    if x > 1 {
+        if y < 15 {
+            let result: Int = 10
+            stdout# result
+        } else {
+            let result: Int = 5
+            stdout# result
+        }
+    } else {
+        let result: Int = 1
+        stdout# result
+    }
+}
