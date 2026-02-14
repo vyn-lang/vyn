@@ -184,9 +184,16 @@ impl VynVM {
 
                 OpCode::STORE_GLOBAL => {
                     let src_reg = read_uint8(&self.instructions, self.ip + 1) as usize;
-                    self.ip += 1;
+                    let global_idx = read_uint16(&self.instructions, self.ip + 2) as usize;
+                    self.ip += 3;
+
                     let src = self.get_register(src_reg);
-                    self.add_global(src);
+
+                    if self.globals.len() <= global_idx {
+                        self.add_global(src);
+                    } else {
+                        self.globals[global_idx] = src
+                    }
                 }
 
                 OpCode::LOAD_GLOBAL => {

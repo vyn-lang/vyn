@@ -48,7 +48,7 @@ pub enum VynIROC {
 
     // ===== Globals Interaction ====
     LoadGlobal { dest: VReg, global_idx: usize },
-    StoreGlobal { value_reg: VReg },
+    StoreGlobal { value_reg: VReg, global_idx: usize },
 
     // ===== Jumps =====
     JumpIfFalse { condition_reg: VReg, label: Label },

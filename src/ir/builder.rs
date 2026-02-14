@@ -91,13 +91,30 @@ impl<'a> VynIRBuilder<'a> {
                     value_reg = self.build_expr(&value)?;
                 }
 
-                self.emit(VynIROC::StoreGlobal { value_reg }.spanned(span));
                 self.symbol_table.declare_ident(
                     symbol_type,
-                    var_name,
+                    var_name.clone(),
                     *mutable,
                     span,
                     &mut self.error_collector,
+                );
+
+                // TODO: Resolve for global_idx, mjght be inefficient with this
+                // approach, we'll reformat this later
+                let ident_idx = match self
+                    .symbol_table
+                    .resolve_symbol(&var_name, span, &mut self.error_collector)?
+                    .scope
+                {
+                    SymbolScope::Global(n) => n,
+                };
+
+                self.emit(
+                    VynIROC::StoreGlobal {
+                        value_reg,
+                        global_idx: ident_idx,
+                    }
+                    .spanned(span),
                 );
             }
 
@@ -185,6 +202,35 @@ impl<'a> VynIRBuilder<'a> {
                 );
 
                 dest
+            }
+
+            Expr::VariableAssignment {
+                identifier,
+                new_value,
+            } => {
+                let value_reg = self.build_expr(&new_value)?;
+                let var_name = match &identifier.node {
+                    Expr::Identifier(n) => n,
+                    _ => unreachable!(),
+                };
+
+                let identifier_symbol = self.symbol_table.resolve_symbol(
+                    var_name,
+                    expr.span,
+                    &mut self.error_collector,
+                )?;
+
+                match identifier_symbol.scope {
+                    SymbolScope::Global(idx) => self.emit(
+                        VynIROC::StoreGlobal {
+                            value_reg,
+                            global_idx: idx,
+                        }
+                        .spanned(expr.span),
+                    ),
+                }
+
+                value_reg
             }
 
             Expr::Identifier(name) => {

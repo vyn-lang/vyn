@@ -302,9 +302,16 @@ impl VynCompiler {
              * Stores a value to global variable
              * -- Operands: [value_reg]
              * */
-            VynIROC::StoreGlobal { value_reg } => {
+            VynIROC::StoreGlobal {
+                value_reg,
+                global_idx,
+            } => {
                 let reg = self.get(*value_reg)?;
-                self.emit(OpCode::StoreGlobal, vec![reg as usize], inst.span);
+                self.emit(
+                    OpCode::StoreGlobal,
+                    vec![reg as usize, *global_idx],
+                    inst.span,
+                );
                 self.free(*value_reg, inst_idx + 1);
             }
 
