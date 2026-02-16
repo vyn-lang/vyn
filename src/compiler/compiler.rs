@@ -299,36 +299,6 @@ impl VynCompiler {
             }
 
             /*
-             * Stores a value to global variable
-             * -- Operands: [value_reg]
-             * */
-            VynIROC::StoreGlobal {
-                value_reg,
-                global_idx,
-            } => {
-                let reg = self.get(*value_reg)?;
-                self.emit(
-                    OpCode::StoreGlobal,
-                    vec![reg as usize, *global_idx],
-                    inst.span,
-                );
-                self.free(*value_reg, inst_idx + 1);
-            }
-
-            /*
-             * Loads a global variable
-             * -- Operands: [dest, global_idx]
-             * */
-            VynIROC::LoadGlobal { dest, global_idx } => {
-                let dest = self.allocate(*dest, inst_idx, inst.span)?;
-                self.emit(
-                    OpCode::LoadGlobal,
-                    vec![dest as usize, *global_idx],
-                    inst.span,
-                );
-            }
-
-            /*
              * Conditional jump (jump if condition is false)
              * -- Operands: [condition_reg, offset]
              * -- Note: offset is patched later via backpatching
@@ -371,6 +341,21 @@ impl VynCompiler {
             VynIROC::Label(label) => {
                 // Record current bytecode position for this label
                 label_positions.insert(*label, self.instructions.len());
+            }
+
+            /*
+             * Copies the value in register X ---
+             * and copies it to register Y ---
+             * -- Operands: [reg_x, reg_y]
+             * */
+            VynIROC::Move { dest, src } => {
+                let dest_reg = self.get(*dest)?;
+                let src_reg = self.get(*src)?;
+                self.emit(
+                    OpCode::Move,
+                    vec![dest_reg as usize, src_reg as usize],
+                    inst.span,
+                );
             }
 
             /*

@@ -1,5 +1,5 @@
 use crate::{
-    ast::ast::Expression,
+    ast::ast::{Expr, Expression},
     ir::{builder::VynIRBuilder, ir_instr::VynIROC},
     tokens::Token,
     type_checker::type_checker::Type,
@@ -17,12 +17,7 @@ impl VynIRBuilder<'_> {
         let b_right = self.build_expr(right.as_ref())?;
         let dest = self.allocate_vreg();
 
-        let expr_type = Type::from_ast(
-            left,
-            self.static_eval,
-            self.symbol_type_table,
-            &mut self.error_collector,
-        );
+        let expr_type = self.get_expr_type(expr)?;
         let opcode = match operator {
             // Arithmetic
             Token::Plus | Token::Minus | Token::Asterisk | Token::Slash | Token::Caret => {
@@ -41,6 +36,29 @@ impl VynIRBuilder<'_> {
         self.emit(opcode.spanned(expr.span));
 
         Some(dest)
+    }
+
+    fn get_expr_type(&mut self, expr: &Expression) -> Option<Type> {
+        match &expr.node {
+            Expr::IntegerLiteral(_) => Some(Type::Integer),
+            Expr::FloatLiteral(_) => Some(Type::Float),
+            Expr::BooleanLiteral(_) => Some(Type::Bool),
+            Expr::StringLiteral(_) => Some(Type::String),
+
+            Expr::Identifier(name) => {
+                let symbol =
+                    self.symbol_table
+                        .resolve_symbol(name, expr.span, &mut self.error_collector)?;
+                Some(symbol.symbol_type.clone())
+            }
+
+            Expr::BinaryOperation { left, .. } => {
+                // Binary expr type = left operand type (type checker validated they match)
+                self.get_expr_type(left)
+            }
+
+            _ => None, // Shouldn't reach here for arithmetic/comparison
+        }
     }
 
     fn build_arith_expr(

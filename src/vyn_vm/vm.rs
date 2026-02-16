@@ -29,8 +29,6 @@ pub struct VynVM {
     pub(crate) instructions: Instructions,
     // Instruction pointer
     pub(crate) ip: usize,
-    // Globald
-    pub(crate) globals: Vec<RuntimeValue>,
     // Instruction spans
     pub(crate) debug_info: DebugInfo,
 }
@@ -43,7 +41,6 @@ impl VynVM {
             string_table: mem::take(&mut bytecode.string_table),
             instructions: mem::take(&mut bytecode.instructions),
             debug_info: mem::take(&mut bytecode.debug_info),
-            globals: Vec::new(),
             ip: 0,
         }
     }
@@ -182,29 +179,6 @@ impl VynVM {
                     self.set_register(dest, value);
                 }
 
-                OpCode::STORE_GLOBAL => {
-                    let src_reg = read_uint8(&self.instructions, self.ip + 1) as usize;
-                    let global_idx = read_uint16(&self.instructions, self.ip + 2) as usize;
-                    self.ip += 3;
-
-                    let src = self.get_register(src_reg);
-
-                    if self.globals.len() <= global_idx {
-                        self.add_global(src);
-                    } else {
-                        self.globals[global_idx] = src
-                    }
-                }
-
-                OpCode::LOAD_GLOBAL => {
-                    let dest_reg = read_uint8(&self.instructions, self.ip + 1) as usize;
-                    let global_idx = read_uint16(&self.instructions, self.ip + 2) as usize;
-                    self.ip += 3;
-
-                    let global_value = self.get_global(global_idx);
-                    self.set_register(dest_reg, *global_value);
-                }
-
                 OpCode::LOG_ADDR => {
                     let src = read_uint8(&self.instructions, self.ip + 1) as usize;
                     self.ip += 1;
@@ -227,16 +201,6 @@ impl VynVM {
     #[inline(always)]
     pub(crate) fn set_register(&mut self, reg: usize, value: RuntimeValue) {
         self.registers[reg] = value
-    }
-
-    #[inline]
-    pub(crate) fn add_global(&mut self, value: RuntimeValue) {
-        self.globals.push(value);
-    }
-
-    #[inline]
-    pub(crate) fn get_global(&self, idx: usize) -> &RuntimeValue {
-        self.globals.get(idx).unwrap()
     }
 
     #[inline(always)]

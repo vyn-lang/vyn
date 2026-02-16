@@ -1,4 +1,7 @@
-let @x: Int = 0;
-stdout# x
-x = 10;
-stdout# x
+if true {
+  let x: Float = 1.2
+  let y: Float = 1.1028
+  stdout# x+y
+}
+let y: Int = 100
+stdout# y
