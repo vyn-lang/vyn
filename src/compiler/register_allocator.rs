@@ -110,11 +110,39 @@ impl RegisterAllocator {
     fn get_def(&self, inst: &VynIROpCode) -> Option<u32> {
         match &inst.node {
             VynIROC::LoadConstInt { dest, .. } => Some(*dest),
+            VynIROC::LoadConstFloat { dest, .. } => Some(*dest),
+            VynIROC::LoadString { dest, .. } => Some(*dest),
+            VynIROC::LoadBool { dest, .. } => Some(*dest),
+
             VynIROC::AddInt { dest, .. } => Some(*dest),
+            VynIROC::AddFloat { dest, .. } => Some(*dest),
+            VynIROC::SubInt { dest, .. } => Some(*dest),
+            VynIROC::SubFloat { dest, .. } => Some(*dest),
+            VynIROC::MulInt { dest, .. } => Some(*dest),
+            VynIROC::MulFloat { dest, .. } => Some(*dest),
+            VynIROC::DivInt { dest, .. } => Some(*dest),
+            VynIROC::DivFloat { dest, .. } => Some(*dest),
             VynIROC::ExpInt { dest, .. } => Some(*dest),
+            VynIROC::ExpFloat { dest, .. } => Some(*dest),
+
+            VynIROC::CompareEqual { dest, .. } => Some(*dest),
+            VynIROC::CompareNotEqual { dest, .. } => Some(*dest),
+            VynIROC::CompareLessInt { dest, .. } => Some(*dest),
+            VynIROC::CompareLessFloat { dest, .. } => Some(*dest),
+            VynIROC::CompareGreaterInt { dest, .. } => Some(*dest),
+            VynIROC::CompareGreaterFloat { dest, .. } => Some(*dest),
+            VynIROC::CompareLessEqualInt { dest, .. } => Some(*dest),
+            VynIROC::CompareLessEqualFloat { dest, .. } => Some(*dest),
+            VynIROC::CompareGreaterEqualInt { dest, .. } => Some(*dest),
+            VynIROC::CompareGreaterEqualFloat { dest, .. } => Some(*dest),
+
+            VynIROC::Move { dest, .. } => Some(*dest),
+
             VynIROC::LogAddr { .. } => None,
+            VynIROC::JumpIfFalse { .. } => None,
+            VynIROC::JumpUncond { .. } => None,
+            VynIROC::Label(..) => None,
             VynIROC::Halt => None,
-            _ => None,
         }
     }
 
@@ -135,11 +163,39 @@ impl RegisterAllocator {
     fn get_uses(&self, inst: &VynIROpCode) -> Vec<u32> {
         match &inst.node {
             VynIROC::LoadConstInt { .. } => vec![],
+            VynIROC::LoadConstFloat { .. } => vec![],
+            VynIROC::LoadString { .. } => vec![],
+            VynIROC::LoadBool { .. } => vec![],
+
             VynIROC::AddInt { left, right, .. } => vec![*left, *right],
+            VynIROC::AddFloat { left, right, .. } => vec![*left, *right],
+            VynIROC::SubInt { left, right, .. } => vec![*left, *right],
+            VynIROC::SubFloat { left, right, .. } => vec![*left, *right],
+            VynIROC::MulInt { left, right, .. } => vec![*left, *right],
+            VynIROC::MulFloat { left, right, .. } => vec![*left, *right],
+            VynIROC::DivInt { left, right, .. } => vec![*left, *right],
+            VynIROC::DivFloat { left, right, .. } => vec![*left, *right],
             VynIROC::ExpInt { left, right, .. } => vec![*left, *right],
+            VynIROC::ExpFloat { left, right, .. } => vec![*left, *right],
+
+            VynIROC::CompareEqual { left, right, .. } => vec![*left, *right],
+            VynIROC::CompareNotEqual { left, right, .. } => vec![*left, *right],
+            VynIROC::CompareLessInt { left, right, .. } => vec![*left, *right],
+            VynIROC::CompareLessFloat { left, right, .. } => vec![*left, *right],
+            VynIROC::CompareGreaterInt { left, right, .. } => vec![*left, *right],
+            VynIROC::CompareGreaterFloat { left, right, .. } => vec![*left, *right],
+            VynIROC::CompareLessEqualInt { left, right, .. } => vec![*left, *right],
+            VynIROC::CompareLessEqualFloat { left, right, .. } => vec![*left, *right],
+            VynIROC::CompareGreaterEqualInt { left, right, .. } => vec![*left, *right],
+            VynIROC::CompareGreaterEqualFloat { left, right, .. } => vec![*left, *right],
+
+            VynIROC::Move { src, .. } => vec![*src],
             VynIROC::LogAddr { addr } => vec![*addr],
+            VynIROC::JumpIfFalse { condition_reg, .. } => vec![*condition_reg],
+
+            VynIROC::JumpUncond { .. } => vec![],
+            VynIROC::Label(..) => vec![],
             VynIROC::Halt => vec![],
-            _ => vec![],
         }
     }
 

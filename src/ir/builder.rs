@@ -2,6 +2,7 @@ use std::mem;
 
 use crate::{
     ast::ast::{Expr, Expression, Program, Statement, Stmt},
+    bytecode::bytecode::OpCode,
     error_handler::error_collector::ErrorCollector,
     ir::{
         ir_instr::{Label, VReg, VynIROC, VynIROpCode},
@@ -99,6 +100,13 @@ impl<'a> VynIRBuilder<'a> {
                 );
             }
 
+            Stmt::Loop { body } => {
+                let loop_start = self.next_label();
+                self.emit_label(loop_start);
+                self.build_stmt(body, span)?;
+                self.emit(VynIROC::JumpUncond { label: loop_start }.spanned(span));
+            }
+
             Stmt::Scope { statements } => {
                 self.symbol_table.enter_scope();
                 for stmt in statements {
@@ -125,12 +133,14 @@ impl<'a> VynIRBuilder<'a> {
                 );
 
                 self.build_stmt(&consequence, span)?;
-                self.emit(
-                    VynIROC::JumpUncond {
-                        label: if_end_label,
-                    }
-                    .spanned(span),
-                );
+                if !self.is_terminating_stmt(consequence) {
+                    self.emit(
+                        VynIROC::JumpUncond {
+                            label: if_end_label,
+                        }
+                        .spanned(span),
+                    );
+                }
 
                 self.emit_label(else_label);
                 if let Some(else_block) = alternate.as_ref() {
@@ -240,6 +250,17 @@ impl<'a> VynIRBuilder<'a> {
         let reg = self.next_register;
         self.next_register += 1;
         reg
+    }
+
+    fn is_terminating_stmt(&self, stmt: &Statement) -> bool {
+        match &stmt.node {
+            Stmt::Break | Stmt::Continue => true,
+            Stmt::Scope { statements } => statements
+                .last()
+                .map(|s| self.is_terminating_stmt(s))
+                .unwrap_or(false),
+            _ => false,
+        }
     }
 
     pub(crate) fn next_label(&mut self) -> Label {

@@ -125,9 +125,7 @@ impl RuntimeValue {
             RuntimeValue::BooleanLiteral(b) => write!(out, "{b}"),
             RuntimeValue::StringLiteral(idx) => {
                 let value = &string_table[*idx];
-                out.write_all(b"\"")?;
-                out.write_all(value.as_bytes())?;
-                out.write_all(b"\"")
+                out.write_all(value.as_bytes())
             }
             RuntimeValue::ArrayLiteral(idx) => out.write_all(b"arr_unimplemented"),
             //     let elements = match &heap_table[*idx] {

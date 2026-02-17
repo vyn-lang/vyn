@@ -1,7 +1,8 @@
-if true {
-  let x: Float = 1.2
-  let y: Float = 1.1028
-  stdout# x+y
+let @i: Int = 0;
+
+loop {
+  if i < 10 {
+      stdout# i
+    }
+  i = i+1
 }
-let y: Int = 100
-stdout# y

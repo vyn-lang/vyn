@@ -49,7 +49,7 @@ pub enum VynIROC {
     Label(Label),
 
     // Register operations
-    Move { dest: VReg, src: VReg }, // For variable assignment
+    Move { dest: VReg, src: VReg },
 
     // I/O
     LogAddr { addr: VReg },
