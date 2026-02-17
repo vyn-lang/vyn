@@ -1,15 +1,13 @@
 let @i: Int = 0;
 
-loop {
-  i=i+1
+for when i < 20 {
+  i = i+1
 
-  if i == 5 {
-      continue
+  if i == 10 {
+    continue
   }
 
-  if i >= 10 {
+  if i == 15 {
     break
   }
-
-  stdout# i
-}
+ } 

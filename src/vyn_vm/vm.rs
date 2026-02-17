@@ -1,10 +1,11 @@
 use std::{
     io::{self, Write},
     mem,
+    time::{Duration, Instant},
 };
 
 use crate::{
-    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16, read_uint32},
+    bytecode::bytecode::{Instructions, OpCode, ToOpcode, read_uint8, read_uint16},
     compiler::{compiler::Bytecode, debug_info::DebugInfo},
     error_handler::errors::VynError,
     runtime_value::values::RuntimeValue,
@@ -31,6 +32,9 @@ pub struct VynVM {
     pub(crate) ip: usize,
     // Instruction spans
     pub(crate) debug_info: DebugInfo,
+
+    // for debugging
+    runtime_duration: Duration,
 }
 
 impl VynVM {
@@ -42,15 +46,18 @@ impl VynVM {
             instructions: mem::take(&mut bytecode.instructions),
             debug_info: mem::take(&mut bytecode.debug_info),
             ip: 0,
+            runtime_duration: Duration::new(0, 0),
         }
     }
 
     pub fn execute(&mut self) -> Result<(), VynError> {
+        let runtime_dur_start = Instant::now();
         loop {
             let opcode = self.instructions[self.ip];
 
             match opcode {
                 OpCode::HALT => {
+                    self.runtime_duration = runtime_dur_start.elapsed();
                     return Ok(());
                 }
 
@@ -229,6 +236,10 @@ impl VynVM {
         }
 
         occupied
+    }
+
+    pub fn get_runtime_exec_dur(&self) -> Duration {
+        self.runtime_duration
     }
 
     pub fn get_string(&self, idx: usize) -> &str {

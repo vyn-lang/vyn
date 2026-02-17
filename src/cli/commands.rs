@@ -7,6 +7,7 @@ use crate::lexer::Lexer;
 use crate::parser::parser::Parser;
 use crate::type_checker::static_evaluator::StaticEvaluator;
 use crate::type_checker::type_checker::TypeChecker;
+use crate::utils::print_info;
 use crate::vyn_vm::vm::VynVM;
 use colored::*;
 use std::fs;
@@ -56,7 +57,13 @@ impl CommandHandler {
 
         let mut vm = VynVM::new(&mut bc);
         match vm.execute() {
-            Ok(r) => Ok(r),
+            Ok(r) => {
+                if self.args.time {
+                    let duration = vm.get_runtime_exec_dur();
+                    print_info(&format!("Program took {duration:?}"));
+                }
+                Ok(r)
+            }
             Err(ec) => {
                 ec.report(&source);
                 Err(2)

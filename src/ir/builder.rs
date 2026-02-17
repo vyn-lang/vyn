@@ -126,6 +126,36 @@ impl<'a> VynIRBuilder<'a> {
                 self.continue_jump_pos = prev_continue_jump_pos;
             }
 
+            Stmt::WhenLoop { body, condition } => {
+                let loop_start = self.next_label();
+                let loop_end = self.next_label();
+
+                let prev_break_jump_pos = self.break_jump_pos;
+                self.break_jump_pos = Some(loop_end);
+
+                let prev_continue_jump_pos = self.continue_jump_pos;
+                self.continue_jump_pos = Some(loop_start);
+
+                self.emit_label(loop_start);
+                let cond_reg = self.build_expr(condition)?;
+
+                self.emit(
+                    VynIROC::JumpIfFalse {
+                        condition_reg: cond_reg,
+                        label: loop_end,
+                    }
+                    .spanned(span),
+                );
+
+                self.build_stmt(body, span)?;
+
+                self.emit(VynIROC::JumpUncond { label: loop_start }.spanned(span));
+                self.emit_label(loop_end);
+
+                self.break_jump_pos = prev_break_jump_pos;
+                self.continue_jump_pos = prev_continue_jump_pos;
+            }
+
             Stmt::Break => {
                 let jmp_pos = self.break_jump_pos.unwrap();
                 self.emit(VynIROC::JumpUncond { label: jmp_pos }.spanned(span));
