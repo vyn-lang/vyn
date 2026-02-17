@@ -26,8 +26,12 @@ pub struct RegisterAllocator {
     used_physical: HashSet<u8>,
 
     // Liveness info: for each instruction index, stores which virtual
-    // registers are live (still needed) after that instruction
-    live_ranges: Vec<HashSet<u32>>,
+    // registers are live (still needed) BEFORE that instruction executes
+    live_in: Vec<HashSet<u32>>,
+
+    // Liveness info: for each instruction index, stores which virtual
+    // registers are live (still needed) AFTER that instruction executes
+    live_out: Vec<HashSet<u32>>,
 
     // Maximum number of physical registers available in the VM
     max_registers: u8,
@@ -45,7 +49,8 @@ impl RegisterAllocator {
         Self {
             allocation: HashMap::new(),
             used_physical: HashSet::new(),
-            live_ranges: Vec::new(),
+            live_in: Vec::new(),
+            live_out: Vec::new(),
             max_registers,
         }
     }
@@ -53,42 +58,53 @@ impl RegisterAllocator {
     /*
      * Performs liveness analysis on all instructions (backward pass)
      *
-     * Computes which virtual registers are "live" (still needed) after
-     * each instruction. A register is live if its value will be used
-     * in a future instruction.
+     * Computes which virtual registers are "live" (still needed) before
+     * and after each instruction. A register is live if its value will be
+     * used in a future instruction.
      *
      * Algorithm:
      * - Start from the last instruction and work backwards
      * - For each instruction:
-     *   1. Copy the live set from the next instruction
-     *   2. Remove registers that are defined (written) by this instruction
-     *   3. Add registers that are used (read) by this instruction
+     *   1. live_out[i] = live_in[i+1] (what's live after = what's live before next)
+     *   2. live_in[i] = (live_out[i] - def[i]) ∪ use[i]
+     *      (remove what's written, add what's read)
      *
      * -- Arguments: [&mut self], instructions - slice of IR instructions
-     * -- Return value: void (stores results in self.live_ranges)
+     * -- Return value: void (stores results in self.live_in and self.live_out)
      *
      * -- Notes:
      * # Must be called before any allocation takes place
-     * # Results are stored in self.live_ranges where index i contains
-     *   the set of virtual registers live AFTER instruction i
+     * # Results are stored in self.live_in[i] (live BEFORE instruction i)
+     *   and self.live_out[i] (live AFTER instruction i)
      * */
     pub fn analyze_liveness(&mut self, instructions: &[VynIROpCode]) {
         let inst_len = instructions.len();
-        self.live_ranges = vec![HashSet::new(); inst_len + 1];
+        self.live_in = vec![HashSet::new(); inst_len];
+        self.live_out = vec![HashSet::new(); inst_len];
 
+        // Iterate backwards to propagate liveness information
         for i in (0..inst_len).rev() {
-            let mut live = self.live_ranges[i + 1].clone();
             let inst = &instructions[i];
 
+            // live_out[i] = live_in[i+1] (if there is a next instruction)
+            if i + 1 < inst_len {
+                self.live_out[i] = self.live_in[i + 1].clone();
+            }
+
+            // live_in[i] = (live_out[i] - def) ∪ uses
+            let mut live_in = self.live_out[i].clone();
+
+            // Remove what this instruction defines (writes to)
             if let Some(def) = self.get_def(inst) {
-                live.remove(&def);
+                live_in.remove(&def);
             }
 
+            // Add what this instruction uses (reads from)
             for used in self.get_uses(inst) {
-                live.insert(used);
+                live_in.insert(used);
             }
 
-            self.live_ranges[i] = live;
+            self.live_in[i] = live_in;
         }
     }
 
@@ -212,13 +228,14 @@ impl RegisterAllocator {
      * -- Arguments: [&mut self],
      *               virtual_reg - the virtual register ID to allocate for
      *               inst_index - current instruction index (for liveness check)
-     * -- Return value: Result<u8, String>
+     * -- Return value: Result<u8, VynError>
      *                  Ok(physical_reg_id) if allocation succeeds
-     *                  Err(error_msg) if out of registers
+     *                  Err(VynError) if out of registers
      *
      * -- Notes:
      * # analyze_liveness() must be called before this
      * # This function updates internal allocation tables
+     * # Uses live_in[inst_index] to determine what's live at allocation time
      * */
     pub fn allocate(
         &mut self,
@@ -226,12 +243,10 @@ impl RegisterAllocator {
         inst_index: usize,
         span: Span,
     ) -> Result<u8, VynError> {
-        // If already allocated, return the existing physical register
         if let Some(&phys) = self.allocation.get(&virtual_reg) {
             return Ok(phys);
         }
 
-        // Try to find a free physical register
         for phys in 0..self.max_registers {
             if !self.used_physical.contains(&phys) {
                 self.allocation.insert(virtual_reg, phys);
@@ -240,18 +255,14 @@ impl RegisterAllocator {
             }
         }
 
-        // No free registers - try to spill (reuse) a dead register
         if let Some(phys) = self.find_spillable_register(inst_index) {
-            // Remove the old virtual->physical mapping for this physical register
             self.allocation.retain(|_, &mut v| v != phys);
 
-            // Create new mapping
             self.allocation.insert(virtual_reg, phys);
             self.used_physical.insert(phys);
             return Ok(phys);
         }
 
-        // Complete failure - all registers hold live values
         Err(VynError::RegisterOverflow { span })
     }
 
@@ -259,7 +270,7 @@ impl RegisterAllocator {
      * Finds a physical register that can be reused (spilled)
      *
      * Looks for a physical register that currently holds a virtual register
-     * whose value is no longer needed (dead/not live).
+     * whose value is no longer needed (dead/not live) at the current instruction.
      *
      * -- Arguments: [&self], inst_index - current instruction index
      * -- Return value: Some(physical_reg_id) if a spillable register is found,
@@ -267,13 +278,12 @@ impl RegisterAllocator {
      *
      * -- Algorithm:
      * # Check each allocated virtual->physical mapping
-     * # If the virtual register is NOT in the live set, its physical
-     *   register can be reused
+     * # If the virtual register is NOT in live_in[inst_index], its physical
+     *   register can be reused (the value is no longer needed)
      * */
     fn find_spillable_register(&self, inst_index: usize) -> Option<u8> {
-        let live = &self.live_ranges[inst_index];
+        let live = &self.live_in[inst_index];
 
-        // Find a physical register whose virtual register is not live
         for (&virt, &phys) in &self.allocation {
             if !live.contains(&virt) {
                 return Some(phys);
@@ -290,9 +300,9 @@ impl RegisterAllocator {
      * holds the value we need.
      *
      * -- Arguments: [&self], virtual_reg - the virtual register ID to look up
-     * -- Return value: Result<u8, String>
+     * -- Return value: Result<u8, VynError>
      *                  Ok(physical_reg_id) if virtual register is allocated
-     *                  Err(error_msg) if virtual register was never allocated
+     *                  Err(error) if virtual register was never allocated
      *
      * -- Notes:
      * # This should only be called for virtual registers that have already
@@ -319,21 +329,26 @@ impl RegisterAllocator {
      *
      * -- Notes:
      * # Should be called after compiling instructions that use registers
-     * # Only frees if the virtual register is NOT in the live set
+     * # Only frees if the virtual register is NOT in live_out[inst_index]
      * # The physical register becomes available for allocation again
      *
      * -- Usage pattern:
      * # After compiling "AddInt { dest: 2, left: 0, right: 1 }":
-     *   - free(0, inst_index + 1)  // free left operand
-     *   - free(1, inst_index + 1)  // free right operand
+     *   - free(0, inst_index + 1)  // free left operand if dead after next inst
+     *   - free(1, inst_index + 1)  // free right operand if dead after next inst
+     *
+     * -- Notes:
+     * # we keep the mapping in self.allocation for debugging,
+     * # but mark the physical register as free
      * */
     pub fn free(&mut self, virtual_reg: u32, inst_index: usize) {
-        // Only free if this register is no longer live
-        if !self.live_ranges[inst_index].contains(&virtual_reg) {
+        if inst_index >= self.live_out.len() {
+            return;
+        }
+
+        if !self.live_out[inst_index].contains(&virtual_reg) {
             if let Some(&phys) = self.allocation.get(&virtual_reg) {
                 self.used_physical.remove(&phys);
-                // Note: we keep the mapping in self.allocation for debugging,
-                // but mark the physical register as free
             }
         }
     }
