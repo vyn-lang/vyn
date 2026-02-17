@@ -1,0 +1,12 @@
+Allocated vreg 0 -> r0 at inst 0
+Allocated vreg 1 -> r1 at inst 2
+Allocated vreg 3 -> r0 at inst 5
+Allocated vreg 5 -> r0 at inst 11
+Allocated vreg 0 -> r0 at inst 0
+Allocated vreg 1 -> r1 at inst 2
+Allocated vreg 3 -> r1 at inst 5
+Allocated vreg 5 -> r1 at inst 11
+Allocated vreg 0 -> r0 at inst 0
+Allocated vreg 1 -> r1 at inst 2
+Allocated vreg 3 -> r1 at inst 5
+Allocated vreg 5 -> r1 at inst 11

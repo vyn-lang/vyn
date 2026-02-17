@@ -1,5 +1,9 @@
 use colored::Colorize;
-use std::{fs, io::ErrorKind, process};
+use std::{
+    fs::{self, OpenOptions},
+    io::{ErrorKind, Write},
+    process,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Span {
@@ -44,6 +48,15 @@ pub fn read_file(path: String) -> String {
             throw_error(&message, 1)
         }
     }
+}
+
+pub fn log_to_file(msg: &str, path: &str) {
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .unwrap();
+    writeln!(file, "{}", msg).unwrap();
 }
 
 pub fn throw_error(message: &str, code: i32) -> ! {

@@ -23,6 +23,8 @@ pub struct SymbolTable {
     pub symbol_scopes: Vec<HashMap<String, Symbol>>,
     scope_depth: usize,
     next_register: u8,
+    // Track the highest register used at each scope level
+    scope_register_watermarks: Vec<u8>,
 }
 
 impl SymbolTable {
@@ -31,6 +33,7 @@ impl SymbolTable {
             symbol_scopes: vec![HashMap::new()],
             scope_depth: 0,
             next_register: 0,
+            scope_register_watermarks: vec![0],
         }
     }
 
@@ -51,6 +54,11 @@ impl SymbolTable {
                 redeclaration_span: span,
             });
             return None;
+        }
+
+        // Update watermark if necessary
+        if register >= self.next_register {
+            self.next_register = register + 1;
         }
 
         self.current_scope().insert(
@@ -104,24 +112,19 @@ impl SymbolTable {
     pub fn enter_scope(&mut self) {
         self.symbol_scopes.push(HashMap::new());
         self.scope_depth += 1;
+        // Save the current register watermark
+        self.scope_register_watermarks.push(self.next_register);
     }
 
     pub fn exit_scope(&mut self) {
         if self.scope_depth > 0 {
-            // Free registers used in this scope
-            if let Some(scope) = self.symbol_scopes.last() {
-                for symbol in scope.values() {
-                    if let SymbolScope::Register(_) = symbol.scope {
-                        // Registers will be reused in parent scope
-                        if self.next_register > 0 {
-                            self.next_register -= 1;
-                        }
-                    }
-                }
-            }
-
             self.symbol_scopes.pop();
             self.scope_depth -= 1;
+
+            // Restore the register watermark from before this scope
+            if let Some(watermark) = self.scope_register_watermarks.pop() {
+                self.next_register = watermark;
+            }
         }
     }
 

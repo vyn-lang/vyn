@@ -13,7 +13,7 @@ use crate::{
         ir_instr::{Label, VynIROC, VynIROpCode},
     },
     runtime_value::values::RuntimeValue,
-    utils::Span,
+    utils::{Span, log_to_file},
     vyn_vm::vm::MAX_REGISTERS,
 };
 
@@ -144,8 +144,13 @@ impl VynCompiler {
              * -- Operands: [dest, const_idx]
              * */
             VynIROC::LoadConstInt { dest, value } => {
+                let vreg = *dest;
                 let dest = self.allocate(*dest, inst_idx, inst.span)?;
                 let const_idx = self.add_constant(RuntimeValue::IntegerLiteral(*value));
+                log_to_file(
+                    &format!("Allocated vreg {} -> r{} at inst {}", vreg, dest, inst_idx),
+                    "debug.log",
+                );
 
                 self.emit(
                     OpCode::LoadConstInt,

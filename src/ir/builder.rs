@@ -22,6 +22,10 @@ pub struct VynIRBuilder<'a> {
     pub(crate) static_eval: &'a StaticEvaluator,
     pub(crate) symbol_type_table: &'a SymbolTypeTable,
     pub(crate) symbol_table: SymbolTable,
+
+    // Loop context
+    break_jump_pos: Option<Label>,
+    continue_jump_pos: Option<Label>,
 }
 
 pub struct VynIR {
@@ -36,6 +40,8 @@ impl<'a> VynIRBuilder<'a> {
             next_register: 0,
             label_counter: 0,
             static_eval,
+            break_jump_pos: None,
+            continue_jump_pos: None,
             symbol_type_table,
             symbol_table: SymbolTable::new(),
         }
@@ -102,9 +108,32 @@ impl<'a> VynIRBuilder<'a> {
 
             Stmt::Loop { body } => {
                 let loop_start = self.next_label();
+                let loop_end = self.next_label();
+
+                let prev_break_jump_pos = self.break_jump_pos;
+                self.break_jump_pos = Some(loop_end);
+
+                let prev_continue_jump_pos = self.continue_jump_pos;
+                self.continue_jump_pos = Some(loop_start);
+
                 self.emit_label(loop_start);
                 self.build_stmt(body, span)?;
+
                 self.emit(VynIROC::JumpUncond { label: loop_start }.spanned(span));
+                self.emit_label(loop_end);
+
+                self.break_jump_pos = prev_break_jump_pos;
+                self.continue_jump_pos = prev_continue_jump_pos;
+            }
+
+            Stmt::Break => {
+                let jmp_pos = self.break_jump_pos.unwrap();
+                self.emit(VynIROC::JumpUncond { label: jmp_pos }.spanned(span));
+            }
+
+            Stmt::Continue => {
+                let jmp_pos = self.continue_jump_pos.unwrap();
+                self.emit(VynIROC::JumpUncond { label: jmp_pos }.spanned(span));
             }
 
             Stmt::Scope { statements } => {
